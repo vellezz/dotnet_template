@@ -1,0 +1,4760 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Example.Bff | public",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/sleepdiary/entries": {
+      "get": {
+        "tags": [
+          "SleepDiary – SleepEntries"
+        ],
+        "summary": "Returns the caller's diary entries in a date range, with the average sleep time and quality.",
+        "description": "Required scope: `sleepdiary.entry.read`. The range is inclusive on both ends, matched against the entry date, and may cover at most\r\n366 days. Days without an entry are omitted and do not affect the averages.",
+        "operationId": "SleepDiarySleepEntries_List",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First day of the range (inclusive), `YYYY-MM-DD`.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last day of the range (inclusive), `YYYY-MM-DD`; not earlier than from and at most 365 days after it.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The diary for the range; `entries` is empty and both averages are `null` when there are no entries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SleepDiarySleepDiaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range (`validation.failed`): to is before from or the range is longer than 366 days.\r\nA date that is not in the `YYYY-MM-DD` format is rejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.read` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/sleepdiary/entries/{date}": {
+      "get": {
+        "tags": [
+          "SleepDiary – SleepEntries"
+        ],
+        "summary": "Returns the caller's diary entry for one day.",
+        "description": "Required scope: `sleepdiary.entry.read`.",
+        "operationId": "SleepDiarySleepEntries_Get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Entry date (the day the user woke up), `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entry for the day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SleepDiarySleepEntryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The date is not in the `YYYY-MM-DD` format.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.read` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no entry for this day (`sleepdiary.entry.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "SleepDiary – SleepEntries"
+        ],
+        "summary": "Records a new diary entry for the given day.",
+        "description": "Required scope: `sleepdiary.entry.write`. One entry per day: to change an existing entry use `PUT`. The date may be at most\r\none day after today in UTC (tolerance for time zones ahead of UTC). Time in bed and sleep time (time in bed minus the time to fall asleep)\r\nare computed by the service. Recording an entry publishes the integration event `SleepEntryRecordedV1` for other services.",
+        "operationId": "SleepDiarySleepEntries_Record",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Entry date (the day the user woke up), `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The night's data.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepDiarySleepEntryRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepDiarySleepEntryRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepDiarySleepEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The entry was recorded; the body contains its identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SleepDiaryCreatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid data. `validation.failed`: quality outside 1–5, awakenings outside 0–50, negative time to fall asleep, note longer than\r\n2000 characters. A malformed date or body is rejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044).\r\nBusiness rules: `sleepdiary.entry.future_date` (date too far in the future),\r\n`sleepdiary.entry.wake_before_bed` (wake-up not after bedtime), `sleepdiary.entry.wake_date_mismatch` (wake-up day differs\r\nfrom the entry date), `sleepdiary.entry.too_long` (more than 24 hours in bed), `sleepdiary.entry.invalid_latency`\r\n(time to fall asleep longer than the time in bed).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.write` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller already has an entry for this day (`sleepdiary.entry.already_exists`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "SleepDiary – SleepEntries"
+        ],
+        "summary": "Replaces all data of the caller's existing diary entry for the given day.",
+        "description": "Required scope: `sleepdiary.entry.write`. A full replacement: every field is overwritten and an omitted or blank note removes the\r\nexisting one. The entry date cannot be changed; delete the entry and record a new one instead. Computed values are recalculated.\r\nNo integration event is published. When the request is rejected the entry stays unchanged.",
+        "operationId": "SleepDiarySleepEntries_Update",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Entry date (the day the user woke up), `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The new data of the night.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepDiarySleepEntryRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepDiarySleepEntryRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepDiarySleepEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The entry was updated."
+          },
+          "400": {
+            "description": "Invalid data. `validation.failed`: quality outside 1–5, awakenings outside 0–50, negative time to fall asleep, note longer than\r\n2000 characters. A malformed date or body is rejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044). Business rules: `sleepdiary.entry.wake_before_bed`,\r\n`sleepdiary.entry.wake_date_mismatch`, `sleepdiary.entry.too_long`, `sleepdiary.entry.invalid_latency`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.write` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no entry for this day (`sleepdiary.entry.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The entry was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "SleepDiary – SleepEntries"
+        ],
+        "summary": "Permanently deletes the caller's diary entry for the given day.",
+        "description": "Required scope: `sleepdiary.entry.write`. A new entry can be recorded for the same day afterwards. Other services are not notified.",
+        "operationId": "SleepDiarySleepEntries_Delete",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Entry date (the day the user woke up), `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The entry was deleted."
+          },
+          "400": {
+            "description": "The date is not in the `YYYY-MM-DD` format.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.write` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no entry for this day (`sleepdiary.entry.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The entry was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/categories": {
+      "get": {
+        "tags": [
+          "Knowledge – Categories"
+        ],
+        "summary": "Returns all categories of the catalog, ordered by name.",
+        "description": "Required scope: `knowledge.catalog.read`. The list is not paged (the catalog is expected to have few categories) and is\r\nserved from a cache that is refreshed immediately after a category is created or renamed.",
+        "operationId": "KnowledgeCategories_List",
+        "responses": {
+          "200": {
+            "description": "The list of categories (possibly empty).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeCategoryDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.read` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Knowledge – Categories"
+        ],
+        "summary": "Creates a new category.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). Name: required, at most 100 characters (leading and trailing whitespace is\r\ntrimmed). Slug: required, at most 100 characters, only lowercase letters, digits and single hyphens between them\r\n(e.g. `healthy-sleep`), unique across all categories. The slug cannot be changed later.",
+        "operationId": "KnowledgeCategories_Create",
+        "requestBody": {
+          "description": "Name and slug of the new category.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateCategory"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateCategory"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateCategory"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The category was created; the body contains its identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeCreatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name or slug (`validation.failed`, `knowledge.category.invalid_name`, `knowledge.category.invalid_slug`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A category with this slug already exists (`knowledge.category.slug_taken`), also when another request created it at the same moment.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/categories/{categoryId}/name": {
+      "put": {
+        "tags": [
+          "Knowledge – Categories"
+        ],
+        "summary": "Renames a category; its slug stays unchanged.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). Name: required, at most 100 characters (trimmed).\r\nRenaming to the current name succeeds.",
+        "operationId": "KnowledgeCategories_Rename",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "in": "path",
+            "description": "Identifier of the category.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The new name of the category.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeRenameCategoryRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeRenameCategoryRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeRenameCategoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The category was renamed."
+          },
+          "400": {
+            "description": "Invalid name or an empty identifier (`validation.failed`, `knowledge.category.invalid_name`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The category does not exist (`knowledge.category.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The category was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/collections": {
+      "get": {
+        "tags": [
+          "Knowledge – Collections"
+        ],
+        "summary": "Returns a page of published collections, newest first, optionally limited to one category.",
+        "description": "Required scope: `knowledge.catalog.read`. Only collections in status `Published` are returned, ordered by publication\r\ndate descending. For readers the material count includes only published materials, the ones they can open; for editors\r\n(scope `knowledge.catalog.write`) it includes every material of the collection.",
+        "operationId": "KnowledgeCollections_List",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "in": "query",
+            "description": "Optional filter: only collections assigned to this category. An unknown category yields an empty page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number starting at 1; values lower than 1 are treated as 1.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Page size, 20 by default, clamped to the range 1–100.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requested page (possibly empty).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgePagedResultOfCollectionSummaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter has an invalid format (`categoryId` is not a GUID, or `page` or `pageSize` is not an integer);\r\nrejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.read` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Knowledge – Collections"
+        ],
+        "summary": "Creates a new collection in status `Draft`, without materials and categories.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). Title: required, at most 200 characters; description: optional, at most\r\n2000 characters (both trimmed; a blank description is stored as none). Add materials with `PUT /v1/collections/{id}/items`\r\nbefore publishing.",
+        "operationId": "KnowledgeCollections_Create",
+        "requestBody": {
+          "description": "Title and optional description of the collection.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateCollection"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateCollection"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateCollection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The collection was created; the body contains its identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeCreatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid title or description (`validation.failed`, `knowledge.collection.invalid_title`,\r\n`knowledge.collection.invalid_description`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/collections/{collectionId}": {
+      "get": {
+        "tags": [
+          "Knowledge – Collections"
+        ],
+        "summary": "Returns the details of a collection with its materials in the collection's order.",
+        "description": "Required scope: `knowledge.catalog.read`. A reader sees only a published collection and only its published materials\r\n(materials that are drafts or archived are left out of the list). An editor (scope `knowledge.catalog.write`) sees the\r\ncollection and all its materials in every status.",
+        "operationId": "KnowledgeCollections_Get",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "description": "Identifier of the collection.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The collection details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeCollectionDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.read` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The collection does not exist or is not visible to the caller, e.g. a draft requested by a reader (`knowledge.collection.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Knowledge – Collections"
+        ],
+        "summary": "Changes the title and description of a collection.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). Title: required, at most 200 characters; description: optional\r\n(`null` removes it), at most 2000 characters. Allowed in status `Draft` and `Published`; an archived collection\r\ncannot be changed.",
+        "operationId": "KnowledgeCollections_UpdateDetails",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "description": "Identifier of the collection.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The new title and description.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeUpdateCollectionDetailsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeUpdateCollectionDetailsRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeUpdateCollectionDetailsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The details were changed."
+          },
+          "400": {
+            "description": "Invalid title, description or an empty identifier (`validation.failed`, `knowledge.collection.invalid_title`,\r\n`knowledge.collection.invalid_description`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The collection does not exist (`knowledge.collection.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The collection was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The collection is archived (`knowledge.collection.archived`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/collections/{collectionId}/items": {
+      "put": {
+        "tags": [
+          "Knowledge – Collections"
+        ],
+        "summary": "Replaces the list of materials in a collection; the order of the list is the order in the collection.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). At most 200 materials, each at most once; all of them must exist\r\n(in any status: drafts may be added and are hidden from readers until published). A published collection cannot be emptied.\r\nAn archived collection cannot be changed.",
+        "operationId": "KnowledgeCollections_SetItems",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "description": "Identifier of the collection.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The ordered list of material identifiers.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCollectionItemsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCollectionItemsRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCollectionItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The materials of the collection were set."
+          },
+          "400": {
+            "description": "Validation error: missing list or empty identifiers (`validation.failed`), unknown materials\r\n(`knowledge.collection.unknown_materials`), too many materials (`knowledge.collection.too_many_items`)\r\nor duplicates (`knowledge.collection.duplicate_items`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The collection does not exist (`knowledge.collection.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The collection was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry. Two editors replacing the items at the same moment can also get `persistence.duplicate`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The collection is archived (`knowledge.collection.archived`), or it is published and the list is empty\r\n(`knowledge.collection.items_required`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/collections/{collectionId}/categories": {
+      "put": {
+        "tags": [
+          "Knowledge – Collections"
+        ],
+        "summary": "Replaces the set of categories of a collection.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). At most 20 distinct categories, all of which must exist; duplicates in the\r\nrequest are ignored and an empty list removes all assignments. An archived collection cannot be changed.",
+        "operationId": "KnowledgeCollections_SetCategories",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "description": "Identifier of the collection.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Identifiers of the categories.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCategoriesRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCategoriesRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCategoriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The categories of the collection were set."
+          },
+          "400": {
+            "description": "Validation error: missing list or empty identifiers (`validation.failed`), unknown categories (`knowledge.category.unknown`)\r\nor too many categories (`knowledge.collection.too_many_categories`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The collection does not exist (`knowledge.collection.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The collection was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The collection is archived (`knowledge.collection.archived`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/collections/{collectionId}/publish": {
+      "post": {
+        "tags": [
+          "Knowledge – Collections"
+        ],
+        "summary": "Publishes a collection, making it visible to readers.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). The collection must contain at least one material. The operation is\r\nidempotent: publishing an already published collection succeeds without changes (the original publication date is kept).\r\nNo integration event is published for collections.",
+        "operationId": "KnowledgeCollections_Publish",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "description": "Identifier of the collection.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The collection is published."
+          },
+          "400": {
+            "description": "Empty identifier (`validation.failed`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The collection does not exist (`knowledge.collection.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The collection was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The collection is archived or has no materials (`knowledge.collection.archived`, `knowledge.collection.items_required`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/collections/{collectionId}/archive": {
+      "post": {
+        "tags": [
+          "Knowledge – Collections"
+        ],
+        "summary": "Archives a collection: it is hidden from readers and removed from users' favorites.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). Archiving is irreversible (an archived collection can be neither changed\r\nnor published again) and publishes the integration event `CollectionArchivedV1`. Favorites pointing to the collection are\r\nremoved asynchronously, shortly after the response; until then they are already hidden from the favorites list. Materials in the\r\ncollection are not affected. The operation is idempotent: archiving an already archived collection succeeds without changes.",
+        "operationId": "KnowledgeCollections_Archive",
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "description": "Identifier of the collection.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The collection is archived."
+          },
+          "400": {
+            "description": "Empty identifier (`validation.failed`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The collection does not exist (`knowledge.collection.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The collection was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/me/favorites": {
+      "get": {
+        "tags": [
+          "Knowledge – Library"
+        ],
+        "summary": "Returns a page of the caller's favorites, most recently added first.",
+        "description": "Required scope: `knowledge.library.read`. Only items that are still published are returned: favorites pointing to a material\r\nor collection that has since been archived are hidden (and are removed in the background shortly after archiving). The total\r\ncount also counts only visible items.",
+        "operationId": "KnowledgeLibrary_Favorites",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number starting at 1; values lower than 1 are treated as 1.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Page size, 20 by default, clamped to the range 1–100.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requested page (possibly empty).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgePagedResultOfFavoriteDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter has an invalid format (`page` or `pageSize` is not an integer); rejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.library.read` (`auth.missing_scope`) or has no user identifier\r\n(`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/me/favorites/{itemType}/{itemId}": {
+      "put": {
+        "tags": [
+          "Knowledge – Library"
+        ],
+        "summary": "Adds a published material or collection to the caller's favorites.",
+        "description": "Required scope: `knowledge.library.write`. Only published items can be added. The operation is idempotent: adding an item\r\nthat is already a favorite succeeds without changes and keeps the original date added.",
+        "operationId": "KnowledgeLibrary_AddFavorite",
+        "parameters": [
+          {
+            "name": "itemType",
+            "in": "path",
+            "description": "Kind of the item: `Material` or `Collection`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/KnowledgeFavoriteItemType"
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "description": "Identifier of the material or collection.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The item is in the favorites."
+          },
+          "400": {
+            "description": "Invalid item type or an empty identifier (`validation.failed`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.library.write` (`auth.missing_scope`) or has no user identifier\r\n(`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The item does not exist or is not published (`knowledge.library.item_not_available`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Only when two requests add the same item at the same moment: the other request stored it first\r\n(`knowledge.library.favorite_added_concurrently`). The item is in the favorites; retrying returns 204.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Knowledge – Library"
+        ],
+        "summary": "Removes a material or collection from the caller's favorites.",
+        "description": "Required scope: `knowledge.library.write`. Works for items in any status, including archived ones. The operation is\r\nidempotent: removing an item that is not a favorite succeeds.",
+        "operationId": "KnowledgeLibrary_RemoveFavorite",
+        "parameters": [
+          {
+            "name": "itemType",
+            "in": "path",
+            "description": "Kind of the item: `Material` or `Collection`.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/KnowledgeFavoriteItemType"
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "description": "Identifier of the material or collection.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The item is not in the favorites (any more)."
+          },
+          "400": {
+            "description": "Invalid item type or an empty identifier (`validation.failed`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.library.write` (`auth.missing_scope`) or has no user identifier\r\n(`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/me/completions": {
+      "get": {
+        "tags": [
+          "Knowledge – Library"
+        ],
+        "summary": "Returns a page of materials the caller marked as completed, most recently marked first.",
+        "description": "Required scope: `knowledge.library.read`. Like favorites, only materials that are currently published are listed and counted;\r\na mark on a material that was archived later is kept but not shown.",
+        "operationId": "KnowledgeLibrary_Completions",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number starting at 1; values lower than 1 are treated as 1.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Page size, 20 by default, clamped to the range 1–100.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requested page (possibly empty).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgePagedResultOfCompletedMaterialDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter has an invalid format (`page` or `pageSize` is not an integer); rejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.library.read` (`auth.missing_scope`) or has no user identifier\r\n(`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/me/completions/{materialId}": {
+      "put": {
+        "tags": [
+          "Knowledge – Library"
+        ],
+        "summary": "Marks a published material as completed by the caller.",
+        "description": "Required scope: `knowledge.library.write`. Only published materials can be marked. The operation is idempotent: marking\r\nan already completed material succeeds and keeps the original date marked.",
+        "operationId": "KnowledgeLibrary_MarkCompleted",
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "path",
+            "description": "Identifier of the material.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The material is marked as completed."
+          },
+          "400": {
+            "description": "Empty identifier (`validation.failed`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.library.write` (`auth.missing_scope`) or has no user identifier\r\n(`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The material does not exist or is not published (`knowledge.library.item_not_available`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Only when two requests mark the same material at the same moment: the other request stored the mark first\r\n(`knowledge.library.completion_recorded_concurrently`). The material is marked; retrying returns 204.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Knowledge – Library"
+        ],
+        "summary": "Removes the caller's completion mark from a material.",
+        "description": "Required scope: `knowledge.library.write`. Works for materials in any status. The operation is idempotent: removing a mark\r\nthat does not exist succeeds.",
+        "operationId": "KnowledgeLibrary_UnmarkCompleted",
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "path",
+            "description": "Identifier of the material.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The material is not marked as completed (any more)."
+          },
+          "400": {
+            "description": "Empty identifier (`validation.failed`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.library.write` (`auth.missing_scope`) or has no user identifier\r\n(`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/materials": {
+      "get": {
+        "tags": [
+          "Knowledge – Materials"
+        ],
+        "summary": "Returns a page of published materials, newest first, optionally filtered by category and type.",
+        "description": "Required scope: `knowledge.catalog.read`. Only materials in status `Published` are returned, ordered by publication\r\ndate descending. The summaries do not contain the content; use `GET /v1/materials/{id}` for it.",
+        "operationId": "KnowledgeMaterials_List",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "in": "query",
+            "description": "Optional filter: only materials assigned to this category. An unknown category yields an empty page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Optional filter by material type: `Article`, `Video` or `Podcast`.",
+            "schema": {
+              "$ref": "#/components/schemas/MaterialType"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number starting at 1; values lower than 1 are treated as 1.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Page size, 20 by default, clamped to the range 1–100.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requested page (possibly empty).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgePagedResultOfMaterialSummaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "An invalid filter value, e.g. an unknown material type.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.read` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Knowledge – Materials"
+        ],
+        "summary": "Creates a new material in status `Draft`, without content and categories.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). The type cannot be changed later. Title: required, at most 200 characters;\r\ndescription: optional, at most 2000 characters (both trimmed). The main media (an absolute `https` URL of the video or audio\r\nfile and its non-negative duration in seconds) applies only to `Video` and `Podcast`; an article cannot have it.\r\nA duration without a URL is rejected. Videos and podcasts may be created without main media, but need it to be published.",
+        "operationId": "KnowledgeMaterials_Create",
+        "requestBody": {
+          "description": "Type, title, description and optional main media of the material.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateMaterial"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateMaterial"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeCreateMaterial"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The material was created; the body contains its identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeCreatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: invalid type, title, description, URL or duration (`validation.failed`,\r\n`knowledge.material.invalid_title`, `knowledge.material.invalid_description`, `knowledge.url.invalid`,\r\n`knowledge.material.media_not_allowed`, `knowledge.material.invalid_duration`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/materials/{materialId}": {
+      "get": {
+        "tags": [
+          "Knowledge – Materials"
+        ],
+        "summary": "Returns the details of a material with its complete block content.",
+        "description": "Required scope: `knowledge.catalog.read`. A reader sees only published materials; an editor\r\n(scope `knowledge.catalog.write`) also sees drafts and archived materials. Published materials are served from a cache that is\r\ninvalidated whenever the material changes, so readers see changes immediately after a successful write.",
+        "operationId": "KnowledgeMaterials_Get",
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "path",
+            "description": "Identifier of the material.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The material details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeMaterialDetailsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.read` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The material does not exist or is not visible to the caller, e.g. a draft requested by a reader (`knowledge.material.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Knowledge – Materials"
+        ],
+        "summary": "Changes the title, description and main media of a material.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). The same rules as on creation; all fields are replaced, and `null`\r\nremoves the description or the main media. A published video or podcast cannot lose its main media. An archived material cannot\r\nbe changed. Changes are not announced to other services.",
+        "operationId": "KnowledgeMaterials_UpdateDetails",
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "path",
+            "description": "Identifier of the material.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The new details of the material.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeUpdateMaterialDetailsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeUpdateMaterialDetailsRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeUpdateMaterialDetailsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The details were changed."
+          },
+          "400": {
+            "description": "Validation error: invalid title, description, URL, duration or an empty identifier (`validation.failed`,\r\n`knowledge.material.invalid_title`, `knowledge.material.invalid_description`, `knowledge.url.invalid`,\r\n`knowledge.material.media_not_allowed`, `knowledge.material.invalid_duration`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The material does not exist (`knowledge.material.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The material was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The material is archived (`knowledge.material.archived`), or the main media would be removed from a published video or\r\npodcast (`knowledge.material.main_media_required`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/materials/{materialId}/content": {
+      "put": {
+        "tags": [
+          "Knowledge – Materials"
+        ],
+        "summary": "Replaces the whole block content of a material.",
+        "description": "Required scope: knowledge.catalog.write (editor). The content is a tree of blocks distinguished by the type field.\r\nThe main rules: at most 500 blocks in total (children included); each block type allows only specific child types; lists can be\r\nnested at most 3 levels deep and toggles 2 levels; every URL must be an absolute https URL (links in text may also use\r\nmailto:); Embed blocks are accepted only from allowed providers; Image blocks require an alternative text.\r\n    The reading time is recalculated from the new content. A published material cannot be emptied; an archived material cannot be\r\nchanged.",
+        "operationId": "KnowledgeMaterials_ReplaceContent",
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "path",
+            "description": "Identifier of the material.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The new content: top-level blocks with their child blocks.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeReplaceContentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeReplaceContentRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeReplaceContentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The content was replaced."
+          },
+          "400": {
+            "description": "The content breaks a block rule (`knowledge.content.invalid_block`; the message names the path of the offending block, e.g.\r\n`blocks[2].children[0]`), the block list is missing or the identifier is empty (`validation.failed`), or the body is not\r\nvalid content JSON (e.g. an unknown block `type`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The material does not exist (`knowledge.material.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The material was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The material is archived (`knowledge.material.archived`), or it is published and the new content is empty\r\n(`knowledge.material.content_required`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/materials/{materialId}/categories": {
+      "put": {
+        "tags": [
+          "Knowledge – Materials"
+        ],
+        "summary": "Replaces the set of categories of a material.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). At most 20 distinct categories, all of which must exist; duplicates in the\r\nrequest are ignored and an empty list removes all assignments. An archived material cannot be changed.",
+        "operationId": "KnowledgeMaterials_SetCategories",
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "path",
+            "description": "Identifier of the material.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Identifiers of the categories.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCategoriesRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCategoriesRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSetCategoriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The categories of the material were set."
+          },
+          "400": {
+            "description": "Validation error: missing list or empty identifiers (`validation.failed`), unknown categories (`knowledge.category.unknown`)\r\nor too many categories (`knowledge.material.too_many_categories`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The material does not exist (`knowledge.material.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The material was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The material is archived (`knowledge.material.archived`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/materials/{materialId}/publish": {
+      "post": {
+        "tags": [
+          "Knowledge – Materials"
+        ],
+        "summary": "Publishes a material, making it visible to readers.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). Publishing requires content, and a video or podcast also requires main\r\nmedia. The first publication records the publication date and publishes the integration event `MaterialPublishedV1`.\r\nThe operation is idempotent: publishing an already published material succeeds without changes and without a new event.",
+        "operationId": "KnowledgeMaterials_Publish",
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "path",
+            "description": "Identifier of the material.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The material is published."
+          },
+          "400": {
+            "description": "Empty identifier (`validation.failed`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The material does not exist (`knowledge.material.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The material was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The material is archived, has no content or lacks the main media\r\n(`knowledge.material.archived`, `knowledge.material.content_required`, `knowledge.material.main_media_required`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/knowledge/materials/{materialId}/archive": {
+      "post": {
+        "tags": [
+          "Knowledge – Materials"
+        ],
+        "summary": "Archives a material: it is hidden from readers and removed from users' favorites.",
+        "description": "Required scope: `knowledge.catalog.write` (editor). Archiving is irreversible (an archived material can be neither changed nor\r\npublished again) and publishes the integration event `MaterialArchivedV1`. Favorites pointing to the material are removed\r\nasynchronously, shortly after the response; until then they are already hidden from the favorites list. Completion marks are kept.\r\nThe material stays in the collections that contain it but is hidden from readers there. The operation is idempotent: archiving\r\nan already archived material succeeds without changes.",
+        "operationId": "KnowledgeMaterials_Archive",
+        "parameters": [
+          {
+            "name": "materialId",
+            "in": "path",
+            "description": "Identifier of the material.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The material is archived."
+          },
+          "400": {
+            "description": "Empty identifier (`validation.failed`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope `knowledge.catalog.write` (`auth.missing_scope`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The material does not exist (`knowledge.material.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The material was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/me/summary": {
+      "get": {
+        "tags": [
+          "Example – Summary"
+        ],
+        "summary": "Returns the start screen of the module: the user's latest favorites and sleep in the last seven days.",
+        "description": "Calls the Knowledge service (`knowledge.library.read`) and the SleepDiary service (`sleepdiary.entry.read`) at the same time,\r\neach with a 2-second limit. The answer is always 200: every part carries its own `status` (`Ok`, `Forbidden`,\r\n`Unavailable`, `Timeout`) and `data` only when it is `Ok`, so the module shows the parts it got and a message for\r\nthe others.",
+        "operationId": "ExperienceSummary_Get",
+        "responses": {
+          "200": {
+            "description": "The summary; check the `status` of each part.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MySummaryDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "FavoriteItemDto": {
+        "required": [
+          "itemType",
+          "itemId",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "itemType": {
+            "type": "string",
+            "description": "Kind of the item, `Material` or `Collection` (as in the Knowledge contract)."
+          },
+          "itemId": {
+            "type": "string",
+            "description": "Identifier of the material or collection, used to open it through `/v1/knowledge/...`.",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the item."
+          }
+        },
+        "description": "A favorite on the summary screen: what it is and how to open it."
+      },
+      "FavoritesSummaryDto": {
+        "required": [
+          "totalCount",
+          "latest"
+        ],
+        "type": "object",
+        "properties": {
+          "totalCount": {
+            "type": "integer",
+            "description": "Number of all favorites of the user.",
+            "format": "int32"
+          },
+          "latest": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FavoriteItemDto"
+            },
+            "description": "Up to five most recently added favorites, newest first."
+          }
+        },
+        "description": "The user's favorites shown on the summary screen."
+      },
+      "KnowledgeCalloutVariant": {
+        "enum": [
+          "Info",
+          "Tip",
+          "Warning",
+          "Important"
+        ],
+        "description": "Visual and semantic variant of a BlockType.Callout block; clients choose icon and color from it."
+      },
+      "KnowledgeCategoryDto": {
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifier of the category; use it as `CategoryId` filter in list queries and in `Set...Categories` commands.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the category (trimmed, at most int Category.MaxNameLength characters)."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Unique, immutable URL identifier: lowercase letters, digits and hyphens (for example `healthy-sleep`)."
+          }
+        },
+        "description": "A catalog category as returned by ListCategories."
+      },
+      "KnowledgeChecklistItemDto": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeSpanDto"
+            },
+            "description": "Text of the item as formatted text; from 1 to int ContentBuilder.MaxSpansPerBlock spans."
+          },
+          "isChecked": {
+            "type": "boolean",
+            "description": "`true` when the item is shown as done."
+          }
+        },
+        "description": "One item of a ChecklistBlockDto. Not a block by itself, so it has no `type` property."
+      },
+      "KnowledgeCollectionDetailsDto": {
+        "required": [
+          "id",
+          "title",
+          "categoryIds",
+          "materials"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifier of the collection.",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the collection."
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the collection; `null` when there is none."
+          },
+          "status": {
+            "$ref": "#/components/schemas/KnowledgePublicationStatus"
+          },
+          "publishedAt": {
+            "type": "string",
+            "description": "Time of the first publication; `null` for a collection that was never published.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identifiers of the categories the collection belongs to, in no particular order; empty when none."
+          },
+          "materials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeMaterialSummaryDto"
+            },
+            "description": "Materials of the collection in their curated order. Readers get only published materials (draft and archived items are left out);\r\n<br />editors get all of them."
+          }
+        },
+        "description": "Details of one collection with its materials in the curated order; the result of GetCollection."
+      },
+      "KnowledgeCollectionSummaryDto": {
+        "required": [
+          "id",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifier of the collection; pass it to `GetCollection` for details.",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the collection."
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the collection; `null` when there is none."
+          },
+          "materialCount": {
+            "type": "integer",
+            "description": "Number of materials in the collection as the caller sees them in `GetCollection`: for a reader only published materials, for an\r\n<br />editor (scope `knowledge.catalog.write`) all items regardless of their status.",
+            "format": "int32"
+          },
+          "publishedAt": {
+            "type": "string",
+            "description": "Time of the first publication; filled for every item because the list contains only published collections.",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "description": "Short description of a published collection for list screens; one item of the ListCollections result."
+      },
+      "KnowledgeCompletedMaterialDto": {
+        "required": [
+          "materialId",
+          "title",
+          "completedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "materialId": {
+            "type": "string",
+            "description": "Identifier of the material (always a published one); pass it to `GetMaterial` for details.",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/KnowledgeMaterialType"
+          },
+          "title": {
+            "type": "string",
+            "description": "Current title of the material."
+          },
+          "completedAt": {
+            "type": "string",
+            "description": "Time when the user marked the material as completed.",
+            "format": "date-time"
+          }
+        },
+        "description": "A material the calling user has marked as completed; one item of the ListMyCompletedMaterials result."
+      },
+      "KnowledgeContentBlockDto": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoHeadingBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoParagraphBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoQuoteBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoListBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoChecklistBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoCalloutBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoToggleBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoKeyTakeawaysBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoDividerBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoImageBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoGalleryBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoVideoBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoAudioBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoEmbedBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoLinkCardBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoCodeBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoTableBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoTimestampBlockDto"
+          },
+          {
+            "$ref": "#/components/schemas/KnowledgeContentBlockDtoTranscriptBlockDto"
+          }
+        ],
+        "description": "Base type of one block of material content in the HTTP contract (for example a heading, a paragraph or an image).\r\n<br />The content of a material is an ordered list of such blocks; some blocks contain nested blocks, forming a tree.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "heading": "#/components/schemas/KnowledgeContentBlockDtoHeadingBlockDto",
+            "paragraph": "#/components/schemas/KnowledgeContentBlockDtoParagraphBlockDto",
+            "quote": "#/components/schemas/KnowledgeContentBlockDtoQuoteBlockDto",
+            "list": "#/components/schemas/KnowledgeContentBlockDtoListBlockDto",
+            "checklist": "#/components/schemas/KnowledgeContentBlockDtoChecklistBlockDto",
+            "callout": "#/components/schemas/KnowledgeContentBlockDtoCalloutBlockDto",
+            "toggle": "#/components/schemas/KnowledgeContentBlockDtoToggleBlockDto",
+            "keyTakeaways": "#/components/schemas/KnowledgeContentBlockDtoKeyTakeawaysBlockDto",
+            "divider": "#/components/schemas/KnowledgeContentBlockDtoDividerBlockDto",
+            "image": "#/components/schemas/KnowledgeContentBlockDtoImageBlockDto",
+            "gallery": "#/components/schemas/KnowledgeContentBlockDtoGalleryBlockDto",
+            "video": "#/components/schemas/KnowledgeContentBlockDtoVideoBlockDto",
+            "audio": "#/components/schemas/KnowledgeContentBlockDtoAudioBlockDto",
+            "embed": "#/components/schemas/KnowledgeContentBlockDtoEmbedBlockDto",
+            "linkCard": "#/components/schemas/KnowledgeContentBlockDtoLinkCardBlockDto",
+            "code": "#/components/schemas/KnowledgeContentBlockDtoCodeBlockDto",
+            "table": "#/components/schemas/KnowledgeContentBlockDtoTableBlockDto",
+            "timestamp": "#/components/schemas/KnowledgeContentBlockDtoTimestampBlockDto",
+            "transcript": "#/components/schemas/KnowledgeContentBlockDtoTranscriptBlockDto"
+          }
+        },
+        "x-abstract": true
+      },
+      "KnowledgeContentBlockDtoAudioBlockDto": {
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "audio"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Address of the audio file. Required; an absolute `https` URL of at most\r\n<br />int WebUrl.MaxLength characters."
+          },
+          "caption": {
+            "type": "string",
+            "description": "Optional caption shown below the player, at most 300 characters; `null` when there is none."
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "description": "Optional length of the recording in whole seconds, not negative; `null` when unknown.",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "description": "Audio block (discriminator `\"type\": \"audio\"`): an audio player embedded in the material content, pointing at an audio file."
+      },
+      "KnowledgeContentBlockDtoCalloutBlockDto": {
+        "required": [
+          "blocks"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "callout"
+            ],
+            "type": "string"
+          },
+          "variant": {
+            "$ref": "#/components/schemas/KnowledgeCalloutVariant"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeContentBlockDto"
+            },
+            "description": "Nested content blocks shown inside the box, in display order; at least one is required."
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional heading of the box, at most 200 characters; `null` when there is none."
+          }
+        },
+        "description": "Callout block (discriminator `\"type\": \"callout\"`): a highlighted box, such as a tip or a warning, that contains other blocks."
+      },
+      "KnowledgeContentBlockDtoChecklistBlockDto": {
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "checklist"
+            ],
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeChecklistItemDto"
+            },
+            "description": "Items of the checklist in display order; at least one is required."
+          }
+        },
+        "description": "Checklist block (discriminator `\"type\": \"checklist\"`): a list of items, each shown as done or not done."
+      },
+      "KnowledgeContentBlockDtoCodeBlockDto": {
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "code"
+            ],
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "The source code as plain text. Required, must not be blank, at most\r\n<br />int ContentBuilder.MaxCodeLength characters."
+          },
+          "language": {
+            "type": "string",
+            "description": "Optional language identifier for syntax highlighting, for example `csharp` or `json`; free text that is not checked against\r\n<br />a list, at most 30 characters. `null` when not specified."
+          }
+        },
+        "description": "Code block (discriminator `\"type\": \"code\"`): a snippet of source code shown in a monospaced font."
+      },
+      "KnowledgeContentBlockDtoDividerBlockDto": {
+        "properties": {
+          "type": {
+            "enum": [
+              "divider"
+            ],
+            "type": "string"
+          }
+        },
+        "description": "Divider block (discriminator `\"type\": \"divider\"`): a horizontal line that separates sections of content. It has no fields."
+      },
+      "KnowledgeContentBlockDtoEmbedBlockDto": {
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "embed"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Address of the embedded resource. Required; an absolute `https` URL of at most\r\n<br />int WebUrl.MaxLength characters whose host is one of the allowed providers."
+          },
+          "caption": {
+            "type": "string",
+            "description": "Optional caption shown below the embed, at most 300 characters; `null` when there is none."
+          }
+        },
+        "description": "Embed block (discriminator `\"type\": \"embed\"`): a player of an external provider (YouTube, Vimeo, Spotify) embedded in the content."
+      },
+      "KnowledgeContentBlockDtoGalleryBlockDto": {
+        "required": [
+          "images"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "gallery"
+            ],
+            "type": "string"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeImageBlockDto"
+            },
+            "description": "Images of the gallery in display order; from 2 to 12 items, each following the rules of ImageBlockDto."
+          }
+        },
+        "description": "Gallery block (discriminator `\"type\": \"gallery\"`): a set of images shown together, for example as a grid or a carousel."
+      },
+      "KnowledgeContentBlockDtoHeadingBlockDto": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "heading"
+            ],
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "description": "Level of the heading, from 1 (most important) to 4.",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string",
+            "description": "Text of the heading as plain text. Required, must not be blank, at most 200 characters."
+          }
+        },
+        "description": "Heading block (discriminator `\"type\": \"heading\"`): the title of a section of the material content."
+      },
+      "KnowledgeContentBlockDtoImageBlockDto": {
+        "required": [
+          "url",
+          "altText"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "image"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Address of the image. Required; an absolute `https` URL of at most int WebUrl.MaxLength characters."
+          },
+          "altText": {
+            "type": "string",
+            "description": "Alternative text describing the image for screen readers and for when the image cannot be loaded. Required, must not be blank,\r\n<br />at most 300 characters."
+          },
+          "caption": {
+            "type": "string",
+            "description": "Optional caption shown below the image, at most 300 characters; `null` when there is none."
+          },
+          "credit": {
+            "type": "string",
+            "description": "Optional author or source of the image, at most 200 characters; `null` when there is none."
+          }
+        },
+        "description": "Image block (discriminator `\"type\": \"image\"`): a single illustration. The same record describes each image of a\r\n<br />GalleryBlockDto."
+      },
+      "KnowledgeContentBlockDtoKeyTakeawaysBlockDto": {
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "keyTakeaways"
+            ],
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeTakeawayItemDto"
+            },
+            "description": "The takeaways in display order; at least one is required."
+          }
+        },
+        "description": "Key takeaways block (discriminator `\"type\": \"keyTakeaways\"`): a summary of the most important points of the material."
+      },
+      "KnowledgeContentBlockDtoLinkCardBlockDto": {
+        "required": [
+          "url",
+          "title"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "linkCard"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Target address. Required; an absolute `https` URL of at most int WebUrl.MaxLength characters."
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the card. Required, must not be blank, at most 200 characters."
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description of the target page, at most 500 characters; `null` when there is none."
+          }
+        },
+        "description": "Link card block (discriminator `\"type\": \"linkCard\"`): a prominent link to an external page, shown with a title and a description."
+      },
+      "KnowledgeContentBlockDtoListBlockDto": {
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "list"
+            ],
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/KnowledgeListStyle"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeListItemDto"
+            },
+            "description": "Items of the list in display order; at least one is required."
+          }
+        },
+        "description": "List block (discriminator `\"type\": \"list\"`): a bulleted or numbered list whose items may contain nested lists."
+      },
+      "KnowledgeContentBlockDtoParagraphBlockDto": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "paragraph"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeSpanDto"
+            },
+            "description": "Spans of the paragraph in reading order; from 1 to int ContentBuilder.MaxSpansPerBlock spans."
+          }
+        },
+        "description": "Paragraph block (discriminator `\"type\": \"paragraph\"`): the basic block of formatted running text."
+      },
+      "KnowledgeContentBlockDtoQuoteBlockDto": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "quote"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeSpanDto"
+            },
+            "description": "Spans of the quotation; from 1 to int ContentBuilder.MaxSpansPerBlock spans."
+          },
+          "author": {
+            "type": "string",
+            "description": "Optional author of the quotation, at most 200 characters; `null` when unknown."
+          },
+          "source": {
+            "type": "string",
+            "description": "Optional source, for example the title of a book, at most 200 characters; `null` when there is none."
+          }
+        },
+        "description": "Quote block (discriminator `\"type\": \"quote\"`): a highlighted quotation with an optional author and source."
+      },
+      "KnowledgeContentBlockDtoTableBlockDto": {
+        "required": [
+          "rows"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "table"
+            ],
+            "type": "string"
+          },
+          "hasHeaderRow": {
+            "type": "boolean",
+            "description": "`true` when the first row holds column headers and should be rendered as such."
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeTableRowDto"
+            },
+            "description": "Rows of the table from top to bottom; from 1 to 20 rows, all with the same number of cells."
+          }
+        },
+        "description": "Table block (discriminator `\"type\": \"table\"`): a simple grid of cells containing formatted text, without merged cells."
+      },
+      "KnowledgeContentBlockDtoTimestampBlockDto": {
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "timestamp"
+            ],
+            "type": "string"
+          },
+          "atSeconds": {
+            "type": "integer",
+            "description": "Position in the recording in whole seconds from its start; not negative.",
+            "format": "int32"
+          },
+          "text": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeSpanDto"
+            },
+            "description": "Spans describing the point; from 1 to int ContentBuilder.MaxSpansPerBlock spans."
+          }
+        },
+        "description": "Timestamp block (discriminator `\"type\": \"timestamp\"`): a described point in the recording of a video or podcast material,\r\n<br />for example the start of a chapter. Clients can use it to seek the player."
+      },
+      "KnowledgeContentBlockDtoToggleBlockDto": {
+        "required": [
+          "title",
+          "blocks"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "toggle"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title visible while the toggle is collapsed. Required, must not be blank, at most 200 characters."
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeContentBlockDto"
+            },
+            "description": "Nested content blocks shown when the toggle is expanded, in display order; at least one is required."
+          }
+        },
+        "description": "Toggle block (discriminator `\"type\": \"toggle\"`): a title that expands to show nested blocks, for example an FAQ entry."
+      },
+      "KnowledgeContentBlockDtoTranscriptBlockDto": {
+        "required": [
+          "segments"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "transcript"
+            ],
+            "type": "string"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeTranscriptSegmentDto"
+            },
+            "description": "Segments of the transcript in display order; at least one is required."
+          }
+        },
+        "description": "Transcript block (discriminator `\"type\": \"transcript\"`): the spoken text of a recording, split into timed segments."
+      },
+      "KnowledgeContentBlockDtoVideoBlockDto": {
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "video"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Address of the video file. Required; an absolute `https` URL of at most\r\n<br />int WebUrl.MaxLength characters."
+          },
+          "caption": {
+            "type": "string",
+            "description": "Optional caption shown below the player, at most 300 characters; `null` when there is none."
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "description": "Optional length of the video in whole seconds, not negative; `null` when unknown.",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "description": "Video block (discriminator `\"type\": \"video\"`): a video player embedded in the material content, pointing at a video file."
+      },
+      "KnowledgeCreateCategory": {
+        "required": [
+          "name",
+          "slug"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name of the category; not blank, at most int Category.MaxNameLength characters after trimming. Stored trimmed."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Unique identifier of the category for URLs; at most int Category.MaxSlugLength characters,\r\n<br />only lowercase letters `a-z`, digits and single hyphens between them (for example `healthy-sleep`). Cannot be changed later."
+          }
+        },
+        "description": "Creates a catalog category with a display name and a unique slug. Categories are flat (no hierarchy) and are used to group\r\n<br />materials and collections. Requires scope string KnowledgeScopes.CatalogWrite."
+      },
+      "KnowledgeCreateCollection": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the collection; not blank, at most int Collection.MaxTitleLength characters after trimming. Stored trimmed."
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description, at most int Collection.MaxDescriptionLength characters after trimming;\r\n<br />`null` or blank means no description. Stored trimmed."
+          }
+        },
+        "description": "Creates a collection (an ordered, curated list of materials) as a draft without materials and categories.\r\n<br />Requires scope string KnowledgeScopes.CatalogWrite."
+      },
+      "KnowledgeCreatedResponse": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifier of the created resource, used in subsequent calls (e.g. `/v1/materials/{id}`).",
+            "format": "uuid"
+          }
+        },
+        "description": "Body of the `201 Created` response returned when a category, material or collection is created."
+      },
+      "KnowledgeCreateMaterial": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/KnowledgeMaterialType"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the material; not blank, at most int Material.MaxTitleLength characters after trimming. Stored trimmed."
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional short description (lead), at most int Material.MaxDescriptionLength characters after trimming; `null` or blank means\r\n<br />no description. Stored trimmed."
+          },
+          "mainMediaUrl": {
+            "type": "string",
+            "description": "Address of the main recording of a video or podcast (absolute `https` URL); `null` when not known yet.\r\n<br />Must be `null` for an article."
+          },
+          "mainMediaDurationSeconds": {
+            "type": "integer",
+            "description": "Length of the main recording in whole seconds, not negative; `null` when unknown. Allowed only together with\r\n<br />MainMediaUrl.",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "description": "Creates a material (article, video or podcast) as a draft without content and categories.\r\n<br />Requires scope string KnowledgeScopes.CatalogWrite."
+      },
+      "KnowledgeFavoriteDto": {
+        "required": [
+          "itemId",
+          "title",
+          "addedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "itemType": {
+            "$ref": "#/components/schemas/KnowledgeFavoriteItemType"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "Identifier of the material or collection, depending on FavoriteItemType FavoriteDto.ItemType; pass it to `GetMaterial` or `GetCollection`.",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "description": "Current title of the material or collection."
+          },
+          "addedAt": {
+            "type": "string",
+            "description": "Time when the item was added to favorites.",
+            "format": "date-time"
+          }
+        },
+        "description": "One favorite of the calling user; one item of the ListMyFavorites result."
+      },
+      "KnowledgeFavoriteItemType": {
+        "enum": [
+          "Material",
+          "Collection"
+        ],
+        "description": "Kind of item a Favorite points at; decides whether Guid Favorite.ItemId is a material or a collection ID."
+      },
+      "KnowledgeImageBlockDto": {
+        "required": [
+          "url",
+          "altText"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Address of the image. Required; an absolute `https` URL of at most int WebUrl.MaxLength characters."
+          },
+          "altText": {
+            "type": "string",
+            "description": "Alternative text describing the image for screen readers and for when the image cannot be loaded. Required, must not be blank,\r\n<br />at most 300 characters."
+          },
+          "caption": {
+            "type": "string",
+            "description": "Optional caption shown below the image, at most 300 characters; `null` when there is none."
+          },
+          "credit": {
+            "type": "string",
+            "description": "Optional author or source of the image, at most 200 characters; `null` when there is none."
+          }
+        },
+        "description": "Image block (discriminator `\"type\": \"image\"`): a single illustration. The same record describes each image of a\r\n<br />GalleryBlockDto."
+      },
+      "KnowledgeListBlockDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "style": {
+            "$ref": "#/components/schemas/KnowledgeListStyle"
+          },
+          "items": {
+            "description": "Items of the list in display order; at least one is required."
+          }
+        },
+        "description": "List block (discriminator `\"type\": \"list\"`): a bulleted or numbered list whose items may contain nested lists."
+      },
+      "KnowledgeListItemDto": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeSpanDto"
+            },
+            "description": "Text of the item as formatted text; from 1 to int ContentBuilder.MaxSpansPerBlock spans."
+          },
+          "children": {
+            "$ref": "#/components/schemas/KnowledgeListBlockDto"
+          }
+        },
+        "description": "One item of a ListBlockDto, optionally with a nested sub-list. Not a block by itself, so it has no `type` property."
+      },
+      "KnowledgeListStyle": {
+        "enum": [
+          "Unordered",
+          "Ordered"
+        ],
+        "description": "Style of a BlockType.List block."
+      },
+      "KnowledgeMaterialDetailsDto": {
+        "required": [
+          "id",
+          "title",
+          "updatedAt",
+          "categoryIds",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifier of the material.",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/KnowledgeMaterialType"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the material."
+          },
+          "description": {
+            "type": "string",
+            "description": "Short description (lead); `null` when there is none."
+          },
+          "mainMediaUrl": {
+            "type": "string",
+            "description": "Absolute `https` URL of the main recording of a video or podcast; always `null` for an article, and\r\n<br />`null` for a draft video or podcast whose media is not set yet."
+          },
+          "mainMediaDurationSeconds": {
+            "type": "integer",
+            "description": "Length of the main recording in whole seconds; `null` when unknown or there is no main media.",
+            "format": "int32",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/KnowledgePublicationStatus"
+          },
+          "readingTimeMinutes": {
+            "type": "integer",
+            "description": "Estimated reading time of the content in whole minutes, rounded up, at\r\n<br />int ContentBuilder.WordsPerMinute words per minute; at least 1 when the content has\r\n<br />any words, 0 when it has none. It does not include the length of the main media.",
+            "format": "int32"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "Time of the last change of the material (details, content, categories or status).",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "description": "Time of the first publication; `null` for a material that was never published.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identifiers of the categories the material belongs to, in no particular order; empty when none."
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeContentBlockDto"
+            },
+            "description": "Top-level content blocks in display order, each possibly with nested blocks (see ContentBlockDto for the JSON shape);\r\n<br />empty for a material without content."
+          }
+        },
+        "description": "A material with all its data and content; the result of GetMaterial."
+      },
+      "KnowledgeMaterialSummaryDto": {
+        "required": [
+          "id",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifier of the material.",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/KnowledgeMaterialType"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the material."
+          },
+          "description": {
+            "type": "string",
+            "description": "Short description (lead); `null` when there is none."
+          },
+          "readingTimeMinutes": {
+            "type": "integer",
+            "description": "Estimated reading time of the content in whole minutes, rounded up; 0 when the content has no words. See\r\n<br />`MaterialDetailsDto.ReadingTimeMinutes`.",
+            "format": "int32"
+          },
+          "mainMediaDurationSeconds": {
+            "type": "integer",
+            "description": "Length of the main recording of a video or podcast in whole seconds; `null` when unknown or not applicable.",
+            "format": "int32",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "string",
+            "description": "Time of the first publication; `null` for a material that was never published (possible only in an editor's view of\r\n<br />a collection).",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "description": "Short description of a material for list screens: an item of the ListMaterials result and of\r\n<br />`CollectionDetailsDto.Materials`."
+      },
+      "KnowledgeMaterialType": {
+        "enum": [
+          "Article",
+          "Video",
+          "Podcast"
+        ],
+        "description": "Kind of a Material; chosen in Result&amp;lt;Material&amp;gt; Material.Create(MaterialType type, string title, string? description, string? mainMediaUrl, int? mainMediaDurationSeconds, DateTimeOffset now) and immutable afterwards."
+      },
+      "KnowledgePagedResultOfCollectionSummaryDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeCollectionSummaryDto"
+            },
+            "description": "Items of the requested page, in the query's order; empty when the page is beyond the last item."
+          },
+          "page": {
+            "type": "integer",
+            "description": "Number of the returned page, starting at 1.",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "Effective maximum number of items per page after clamping (1 to int Paging.MaxPageSize); the last page may contain fewer.",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "description": "Number of items matching the query across all pages; clients compute the page count as `ceil(TotalCount / PageSize)`.",
+            "format": "int32"
+          }
+        },
+        "description": "One page of a list query, together with the information a client needs to render paging (total count, page number, page size)."
+      },
+      "KnowledgePagedResultOfCompletedMaterialDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeCompletedMaterialDto"
+            },
+            "description": "Items of the requested page, in the query's order; empty when the page is beyond the last item."
+          },
+          "page": {
+            "type": "integer",
+            "description": "Number of the returned page, starting at 1.",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "Effective maximum number of items per page after clamping (1 to int Paging.MaxPageSize); the last page may contain fewer.",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "description": "Number of items matching the query across all pages; clients compute the page count as `ceil(TotalCount / PageSize)`.",
+            "format": "int32"
+          }
+        },
+        "description": "One page of a list query, together with the information a client needs to render paging (total count, page number, page size)."
+      },
+      "KnowledgePagedResultOfFavoriteDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeFavoriteDto"
+            },
+            "description": "Items of the requested page, in the query's order; empty when the page is beyond the last item."
+          },
+          "page": {
+            "type": "integer",
+            "description": "Number of the returned page, starting at 1.",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "Effective maximum number of items per page after clamping (1 to int Paging.MaxPageSize); the last page may contain fewer.",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "description": "Number of items matching the query across all pages; clients compute the page count as `ceil(TotalCount / PageSize)`.",
+            "format": "int32"
+          }
+        },
+        "description": "One page of a list query, together with the information a client needs to render paging (total count, page number, page size)."
+      },
+      "KnowledgePagedResultOfMaterialSummaryDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeMaterialSummaryDto"
+            },
+            "description": "Items of the requested page, in the query's order; empty when the page is beyond the last item."
+          },
+          "page": {
+            "type": "integer",
+            "description": "Number of the returned page, starting at 1.",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "Effective maximum number of items per page after clamping (1 to int Paging.MaxPageSize); the last page may contain fewer.",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "description": "Number of items matching the query across all pages; clients compute the page count as `ceil(TotalCount / PageSize)`.",
+            "format": "int32"
+          }
+        },
+        "description": "One page of a list query, together with the information a client needs to render paging (total count, page number, page size)."
+      },
+      "KnowledgePublicationStatus": {
+        "enum": [
+          "Draft",
+          "Published",
+          "Archived"
+        ],
+        "description": "Lifecycle stage of a Material or a Collection."
+      },
+      "KnowledgeRenameCategoryRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The new name: required, at most 100 characters (trimmed). The slug of the category does not change."
+          }
+        },
+        "description": "Request body of `PUT /v1/categories/{categoryId}/name`: the new name of a category."
+      },
+      "KnowledgeReplaceContentRequest": {
+        "required": [
+          "blocks"
+        ],
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeContentBlockDto"
+            },
+            "description": "Top-level blocks in display order, each with its child blocks (a tree whose nodes are distinguished by the `type` field).\r\n<br />An empty list removes the content, which is not allowed for a published material. At most 500 blocks in total, children included."
+          }
+        },
+        "description": "Request body of `PUT /v1/materials/{materialId}/content`: the complete new block content of a material."
+      },
+      "KnowledgeSetCategoriesRequest": {
+        "required": [
+          "categoryIds"
+        ],
+        "type": "object",
+        "properties": {
+          "categoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identifiers of existing categories, at most 20 distinct ones; duplicates are ignored and an empty list removes all assignments."
+          }
+        },
+        "description": "Request body of `PUT /v1/materials/{materialId}/categories` and `PUT /v1/collections/{collectionId}/categories`:\r\n<br />the complete new set of categories, replacing the current assignments."
+      },
+      "KnowledgeSetCollectionItemsRequest": {
+        "required": [
+          "materialIds"
+        ],
+        "type": "object",
+        "properties": {
+          "materialIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identifiers of existing materials in the order in which they appear in the collection; at most 200, without duplicates.\r\n<br />An empty list is not allowed for a published collection."
+          }
+        },
+        "description": "Request body of `PUT /v1/collections/{collectionId}/items`: the complete new list of materials, replacing the current one."
+      },
+      "KnowledgeSpanDto": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The characters of the span. Required, must not be empty, at most int ContentBuilder.MaxSpanLength characters."
+          },
+          "marks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional formatting as a list of single TextMarks flags serialized as strings: `Bold`, `Italic`,\r\n<br />`Underline`, `Strikethrough`, `Code`, `Highlight`. Do not send `None`. `null` or an empty\r\n<br />list means unformatted text; duplicates are harmless because the flags are combined."
+          },
+          "link": {
+            "type": "string",
+            "description": "Optional link target: an absolute `https` URL or a `mailto:` address, at most\r\n<br />int WebUrl.MaxLength characters. `null` when the span is not a link."
+          }
+        },
+        "description": "A span of formatted text: a run of characters that share the same formatting and, optionally, the same link.\r\n<br />Every text block (paragraph, quote, list item, table cell and so on) holds its text as an ordered list of spans."
+      },
+      "KnowledgeTableCellDto": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeSpanDto"
+            },
+            "description": "Spans of the cell; the list may be empty (an empty cell, the only text item where that is allowed) and holds at most\r\n<br />int ContentBuilder.MaxSpansPerBlock spans."
+          }
+        },
+        "description": "One cell of a TableRowDto. Not a block by itself, so it has no `type` property."
+      },
+      "KnowledgeTableRowDto": {
+        "required": [
+          "cells"
+        ],
+        "type": "object",
+        "properties": {
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeTableCellDto"
+            },
+            "description": "Cells of the row from left to right; from 1 to 10 cells, the same number in every row of the table."
+          }
+        },
+        "description": "One row of a TableBlockDto. Not a block by itself, so it has no `type` property."
+      },
+      "KnowledgeTakeawayItemDto": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeSpanDto"
+            },
+            "description": "Spans of the takeaway; from 1 to int ContentBuilder.MaxSpansPerBlock spans."
+          }
+        },
+        "description": "One takeaway of a KeyTakeawaysBlockDto. Not a block by itself, so it has no `type` property."
+      },
+      "KnowledgeTranscriptSegmentDto": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "atSeconds": {
+            "type": "integer",
+            "description": "Start of the segment in whole seconds from the beginning of the recording; not negative.",
+            "format": "int32"
+          },
+          "text": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeSpanDto"
+            },
+            "description": "Spans of the spoken text; from 1 to int ContentBuilder.MaxSpansPerBlock spans."
+          },
+          "speaker": {
+            "type": "string",
+            "description": "Optional name of the speaker, at most 100 characters; `null` when not specified."
+          }
+        },
+        "description": "One segment of a TranscriptBlockDto: what was said from a given moment of the recording. Not a block by itself,\r\n<br />so it has no `type` property."
+      },
+      "KnowledgeUpdateCollectionDetailsRequest": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The new title: required, at most 200 characters (trimmed)."
+          },
+          "description": {
+            "type": "string",
+            "description": "The new description, at most 2000 characters; `null` or a blank string removes it."
+          }
+        },
+        "description": "Request body of `PUT /v1/collections/{collectionId}`: the new title and description of a collection."
+      },
+      "KnowledgeUpdateMaterialDetailsRequest": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The new title: required, at most 200 characters (trimmed)."
+          },
+          "description": {
+            "type": "string",
+            "description": "The new description, at most 2000 characters; `null` or a blank string removes it."
+          },
+          "mainMediaUrl": {
+            "type": "string",
+            "description": "Absolute `https` URL of the main media (the video or audio file); only for materials of type `Video` and `Podcast`,\r\n<br />must be `null` for an article. `null` removes the main media, which a published video or podcast\r\n<br />cannot do."
+          },
+          "mainMediaDurationSeconds": {
+            "type": "integer",
+            "description": "Duration of the main media in seconds (zero or more); allowed only together with MainMediaUrl,\r\n<br />otherwise `null`.",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "description": "Request body of `PUT /v1/materials/{materialId}`: the new title, description and main media of a material. All fields are\r\n<br />replaced; omitted optional fields are treated as `null` and remove the current value."
+      },
+      "MaterialType": {
+        "enum": [
+          "Article",
+          "Video",
+          "Podcast",
+          null
+        ]
+      },
+      "MySummaryDto": {
+        "required": [
+          "favorites",
+          "sleepWeek"
+        ],
+        "type": "object",
+        "properties": {
+          "favorites": {
+            "$ref": "#/components/schemas/ResponsePartOfFavoritesSummaryDto"
+          },
+          "sleepWeek": {
+            "$ref": "#/components/schemas/ResponsePartOfSleepWeekDto"
+          }
+        },
+        "description": "The start screen of the Example module, composed by the BFF from two domain services; each part is loaded and reported independently."
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable, machine-readable error code, e.g. knowledge.material.archived; clients branch on it (ADR-0015)."
+          },
+          "traceId": {
+            "type": "string",
+            "description": "Trace identifier of the request, used to find its traces and logs."
+          }
+        }
+      },
+      "ResponsePartOfFavoritesSummaryDto": {
+        "required": [
+          "status",
+          "data"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ResponsePartStatus"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true
+              },
+              {
+                "$ref": "#/components/schemas/FavoritesSummaryDto"
+              }
+            ]
+          }
+        }
+      },
+      "ResponsePartOfSleepWeekDto": {
+        "required": [
+          "status",
+          "data"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ResponsePartStatus"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true
+              },
+              {
+                "$ref": "#/components/schemas/SleepWeekDto"
+              }
+            ]
+          }
+        }
+      },
+      "ResponsePartStatus": {
+        "enum": [
+          "Ok",
+          "Forbidden",
+          "Unavailable",
+          "Timeout"
+        ]
+      },
+      "SleepDiaryCreatedResponse": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Technical identifier of the new entry (GUID). The entry is addressed by its date in all other endpoints; the identifier is informational\r\n<br />and matches `entryId` of the `SleepEntryRecordedV1` integration event.",
+            "format": "uuid"
+          }
+        },
+        "description": "Response body of `201 Created` after a new sleep diary entry was recorded."
+      },
+      "SleepDiarySleepDiaryDto": {
+        "required": [
+          "from",
+          "to",
+          "entries"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "First day of the range (inclusive), echoed from the query.",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "description": "Last day of the range (inclusive), echoed from the query.",
+            "format": "date"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SleepDiarySleepEntryDto"
+            },
+            "description": "Entries whose date falls in the range, sorted by date ascending; an empty list when there are none."
+          },
+          "averageSleepMinutes": {
+            "type": "number",
+            "description": "Mean of int SleepEntryDto.SleepMinutes over Entries, in minutes, rounded to 1 decimal place;\r\n<br />`null` when there are no entries.",
+            "format": "double",
+            "nullable": true
+          },
+          "averageQuality": {
+            "type": "number",
+            "description": "Mean of int SleepEntryDto.Quality (scale 1–5) over Entries, rounded to 2 decimal places;\r\n<br />`null` when there are no entries.",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "description": "The current user's sleep diary for a range of days: the entries in the range and averages computed from them. Result of ListSleepEntries."
+      },
+      "SleepDiarySleepEntryDto": {
+        "required": [
+          "id",
+          "date",
+          "bedTime",
+          "wakeTime"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Technical identifier of the entry (GUID). Entries are addressed by Date in the API.",
+            "format": "uuid"
+          },
+          "date": {
+            "type": "string",
+            "description": "Entry date: the day the user woke up.",
+            "format": "date"
+          },
+          "bedTime": {
+            "type": "string",
+            "description": "When the user went to bed, local time without a time zone (usually on the day before Date).",
+            "format": "date-time"
+          },
+          "wakeTime": {
+            "type": "string",
+            "description": "When the user got up, local time without a time zone; always later than BedTime and on the day Date.",
+            "format": "date-time"
+          },
+          "sleepLatencyMinutes": {
+            "type": "integer",
+            "description": "How long it took to fall asleep, in minutes; between 0 and TimeInBedMinutes.",
+            "format": "int32"
+          },
+          "awakenings": {
+            "type": "integer",
+            "description": "Number of awakenings during the night, from 0 to 50.",
+            "format": "int32"
+          },
+          "quality": {
+            "type": "integer",
+            "description": "Subjective sleep quality, from 1 (worst) to 5 (best).",
+            "format": "int32"
+          },
+          "notes": {
+            "type": "string",
+            "description": "The user's note, trimmed; `null` when there is none."
+          },
+          "timeInBedMinutes": {
+            "type": "integer",
+            "description": "Derived time in bed in whole minutes, from BedTime to WakeTime; at most 1440.",
+            "format": "int32"
+          },
+          "sleepMinutes": {
+            "type": "integer",
+            "description": "Derived sleep time in minutes: TimeInBedMinutes minus SleepLatencyMinutes.",
+            "format": "int32"
+          }
+        },
+        "description": "One sleep diary entry as returned by the API, by GetSleepEntry and inside `SleepDiaryDto`."
+      },
+      "SleepDiarySleepEntryRequest": {
+        "required": [
+          "bedTime",
+          "wakeTime"
+        ],
+        "type": "object",
+        "properties": {
+          "bedTime": {
+            "type": "string",
+            "description": "When the user went to bed, local date and time without an offset, e.g. `2026-09-29T23:15:00`; a value with `Z` or an offset\r\n<br />is rejected (HTTP 400).",
+            "format": "date-time"
+          },
+          "wakeTime": {
+            "type": "string",
+            "description": "When the user got up, local date and time without an offset (a value with `Z` or an offset is rejected, HTTP 400). Must be later than BedTime, on the same calendar day as the\r\n<br />entry date in the URL, and at most 24 hours after BedTime.",
+            "format": "date-time"
+          },
+          "sleepLatencyMinutes": {
+            "type": "integer",
+            "description": "How long it took to fall asleep, in minutes; from 0 up to the time between bedtime and wake-up.",
+            "format": "int32"
+          },
+          "awakenings": {
+            "type": "integer",
+            "description": "Number of times the user woke up during the night, from 0 to 50.",
+            "format": "int32"
+          },
+          "quality": {
+            "type": "integer",
+            "description": "Subjective sleep quality, an integer from 1 (worst) to 5 (best).",
+            "format": "int32"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional note of at most 2000 characters after removing leading and trailing whitespace, and stored that way. `null`, empty or whitespace-only text means\r\n<br />no note; on `PUT` it removes an existing note."
+          }
+        },
+        "description": "Data of one night in the sleep diary, sent when recording (`POST`) or replacing (`PUT`) an entry. The entry date is taken from the URL."
+      },
+      "SleepWeekDto": {
+        "required": [
+          "from",
+          "to",
+          "entryCount",
+          "averageSleepMinutes",
+          "averageQuality"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "First day of the period, `YYYY-MM-DD`.",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "description": "Last day of the period (today in UTC), `YYYY-MM-DD`.",
+            "format": "date"
+          },
+          "entryCount": {
+            "type": "integer",
+            "description": "Number of days with a diary entry in the period (0–7).",
+            "format": "int32"
+          },
+          "averageSleepMinutes": {
+            "type": "number",
+            "description": "Average sleep time of those days in minutes, or `null` without entries.",
+            "format": "double",
+            "nullable": true
+          },
+          "averageQuality": {
+            "type": "number",
+            "description": "Average quality (1–5) of those days, or `null` without entries.",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "description": "The user's sleep in the last seven days (today and the six days before, by entry date)."
+      },
+      "ValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable, machine-readable error code, e.g. knowledge.material.archived; clients branch on it (ADR-0015)."
+          },
+          "traceId": {
+            "type": "string",
+            "description": "Trace identifier of the request, used to find its traces and logs."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "JWT access token issued by the CIAM, passed unchanged by the edge gateway and BFF.",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "SleepDiary – SleepEntries"
+    },
+    {
+      "name": "Knowledge – Categories"
+    },
+    {
+      "name": "Knowledge – Collections"
+    },
+    {
+      "name": "Knowledge – Library"
+    },
+    {
+      "name": "Knowledge – Materials"
+    },
+    {
+      "name": "Example – Summary"
+    }
+  ]
+}

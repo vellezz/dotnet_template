@@ -1,0 +1,157 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Example.Bff | internal",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/internal/v1/widgets/sleep-summary": {
+      "get": {
+        "tags": [
+          "Internal – Widgets"
+        ],
+        "summary": "Returns the user's sleep summary of the last seven days, for a widget in another experience.",
+        "description": "Requires `example.internal.read` in the user's token passed by the calling BFF, and `sleepdiary.entry.read` for the SleepDiary\r\nservice. The period ends today in UTC and covers the six days before.",
+        "operationId": "InternalWidgets_SleepSummary",
+        "responses": {
+          "200": {
+            "description": "The period, the number of days with an entry and the averages (`null` without entries).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SleepWeekDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks `example.internal.read`, or the SleepDiary service rejected it (`auth.missing_scope`, `auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable, machine-readable error code, e.g. knowledge.material.archived; clients branch on it (ADR-0015)."
+          },
+          "traceId": {
+            "type": "string",
+            "description": "Trace identifier of the request, used to find its traces and logs."
+          }
+        }
+      },
+      "SleepWeekDto": {
+        "required": [
+          "from",
+          "to",
+          "entryCount",
+          "averageSleepMinutes",
+          "averageQuality"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "First day of the period, `YYYY-MM-DD`.",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "description": "Last day of the period (today in UTC), `YYYY-MM-DD`.",
+            "format": "date"
+          },
+          "entryCount": {
+            "type": "integer",
+            "description": "Number of days with a diary entry in the period (0–7).",
+            "format": "int32"
+          },
+          "averageSleepMinutes": {
+            "type": "number",
+            "description": "Average sleep time of those days in minutes, or `null` without entries.",
+            "format": "double",
+            "nullable": true
+          },
+          "averageQuality": {
+            "type": "number",
+            "description": "Average quality (1–5) of those days, or `null` without entries.",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "description": "The user's sleep in the last seven days (today and the six days before, by entry date)."
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "JWT access token issued by the CIAM, passed unchanged by the edge gateway and BFF.",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Internal – Widgets"
+    }
+  ]
+}

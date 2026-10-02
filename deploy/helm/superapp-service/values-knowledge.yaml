@@ -1,0 +1,9 @@
+# Experience przykładowa (ADR-0038); w docelowym wdrożeniu nazwa experience zespołu.
+experience: example
+service: knowledge
+secretName: knowledge-secrets
+worker:
+  keda:
+    queues:
+      - knowledge-material-archived
+      - knowledge-collection-archived

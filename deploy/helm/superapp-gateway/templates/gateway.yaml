@@ -1,0 +1,145 @@
+{{- $name := .Values.profile -}}
+{{- if not (has $name (list "bff-web" "gateway-mobile")) }}
+{{- fail "profile musi mieć wartość bff-web lub gateway-mobile" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "superapp.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "superapp.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "app.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: Gateway__Profile
+              value: {{ $name | quote }}
+            - name: Authentication__Authority
+              value: {{ .Values.authentication.authority | quote }}
+            {{- if eq $name "bff-web" }}
+            - name: Authentication__ClientId
+              value: {{ .Values.authentication.clientId | quote }}
+            {{- range $index, $scope := .Values.authentication.scopes }}
+            - name: Authentication__Scopes__{{ $index }}
+              value: {{ $scope | quote }}
+            {{- end }}
+            - name: DataProtection__CertificatePath
+              value: /var/run/secrets/data-protection/certificate.pfx
+            {{- else }}
+            - name: Authentication__Audience
+              value: {{ .Values.authentication.audience | quote }}
+            {{- end }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.endpoint | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ required "secretName jest wymagane" .Values.secretName }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "app.containerSecurityContext" . | nindent 12 }}
+          {{- include "superapp.probes" . | nindent 10 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if eq $name "bff-web" }}
+            - name: data-protection-certificate
+              mountPath: /var/run/secrets/data-protection
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if eq $name "bff-web" }}
+        - name: data-protection-certificate
+          secret:
+            secretName: {{ required "dataProtection.certificateSecretName jest wymagane dla bff-web" .Values.dataProtection.certificateSecretName }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "superapp.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "superapp.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts: [{{ required "ingress.host jest wymagane" .Values.ingress.host | quote }}]
+      secretName: {{ required "ingress.tlsSecretName jest wymagane" .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $name }}
+                port:
+                  name: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+{{- if .Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

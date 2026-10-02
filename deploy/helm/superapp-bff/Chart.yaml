@@ -1,0 +1,6 @@
+apiVersion: v2
+name: superapp-bff
+description: BFF experience (ADR-0038) - API publiczne dla modułu i wewnętrzne dla innych experience, bez bazy; jeden chart wdrażany per experience.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

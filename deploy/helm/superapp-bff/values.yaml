@@ -1,0 +1,36 @@
+# Wartości bazowe BFF experience (ADR-0038); nadpisywane plikiem values-<experience>.yaml i wartościami środowiska w repozytorium GitOps.
+
+# Nazwa experience w małych literach (wymagana): nazwa zasobów <experience>-bff, audience tokenu <experience>-bff i etykieta
+# app.kubernetes.io/part-of, na której opierają się selektory NetworkPolicy (ADR-0041). Etykieta superapp.example/experience-role: bff.
+experience: ""
+
+image:
+  registry: registry.example.local/app
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Secret tworzony przez External Secrets (dział infrastruktury, ADR-0016). BFF nie ma bazy ani brokera; secret może być pusty albo
+# zawierać ustawienia analityki (Analytics__*, ADR-0036). Tokeny użytkownika BFF przekazuje dalej bez zmian (ADR-0040).
+secretName: ""
+
+authentication:
+  authority: ""
+
+# Adresy serwisów domenowych experience i API wewnętrznych innych experience (Service w klastrze), mapowane na
+# Downstream__<Nazwa>__BaseAddress. Nazwa = nazwa użyta w AddDownstreamApi w Program.cs BFF.
+downstream: {}
+
+otel:
+  endpoint: http://otel-collector.observability.svc.cluster.local:4317
+
+replicas: 2
+resources:
+  requests: { cpu: 100m, memory: 192Mi }
+  limits: { memory: 384Mi }
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+terminationGracePeriodSeconds: 30

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: superapp-service
+description: Serwis domenowy (API + Worker); jeden chart wdrażany per serwis z własnymi wartościami (ADR-0016, ADR-0018).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

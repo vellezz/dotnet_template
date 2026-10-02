@@ -1,0 +1,295 @@
+# Lokalne środowisko deweloperskie (ADR-0031, ADR-0034). Keycloak pełni rolę CIAM wyłącznie lokalnie i w testach;
+# na środowiskach dev/test/prod infrastrukturę i CIAM dostarczają inne działy (ADR-0016).
+#
+#   Infrastruktura (tryb hybrydowy: serwisy z IDE):   docker compose -f deploy/local/docker-compose.yml up -d
+#   Cała aplikacja w kontenerach:                     docker compose -f deploy/local/docker-compose.yml --profile app up -d --build
+#
+#   Keycloak: http://localhost:8081 (admin / admin), realm: http://localhost:8081/realms/superapp
+#   MSSQL: localhost,1433 (sa / DB_SA_PASSWORD), baza SuperApp
+#   RabbitMQ: amqp://localhost:5672, panel http://localhost:15672 (guest / guest); Redis: localhost:6380 (port hosta 6380, żeby nie kolidować z innym lokalnym Redisem)
+#   Profil app: BFF https://localhost:5001, gateway mobile https://localhost:5002, BFF experience Example http://localhost:5120,
+#               Knowledge API http://localhost:5101,
+#               SleepDiary API http://localhost:5102
+#
+# Wymagania profilu app: certyfikat deploy/local/certs/devcert.pfx; opcjonalnie deploy/local/.env (kopia .env.example)
+# (deploy/local/dev-cert.ps1 lub dev-cert.sh). Porty bram są takie jak w launchSettings, więc realm i back-channel logout działają
+# tak samo dla bramy z IDE i z kontenera (nie jednocześnie).
+name: superapp-local
+
+x-service-env: &service-env
+  ASPNETCORE_ENVIRONMENT: Development
+  Authentication__Authority: http://keycloak:8080/realms/superapp
+  Authentication__RequireHttpsMetadata: "false"
+  ConnectionStrings__RabbitMq: amqp://guest:guest@rabbitmq:5672/
+  ConnectionStrings__Redis: redis:6379
+  <<: &analytics-env
+    # Analityka produktowa i feature flags (ADR-0036): domyślnie wyłączone (pusty token). Żeby wysyłać do własnego projektu PostHog,
+    # ustaw ANALYTICS_PROJECT_TOKEN i ANALYTICS_ID_KEY (min. 32 znaki) w deploy/local/.env; flagi lokalnie: FeatureFlags__{klucz}.
+    Analytics__ProjectToken: ${ANALYTICS_PROJECT_TOKEN:-}
+    Analytics__IdKey: ${ANALYTICS_ID_KEY:-}
+
+x-service-deps: &service-deps
+  migrator:
+    condition: service_completed_successfully
+  rabbitmq:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  keycloak:
+    condition: service_started
+
+x-gateway-env: &gateway-env
+  ASPNETCORE_ENVIRONMENT: Development
+  ASPNETCORE_URLS: https://+:8443;http://+:8080
+  ASPNETCORE_Kestrel__Certificates__Default__Path: /certs/devcert.pfx
+  ASPNETCORE_Kestrel__Certificates__Default__Password: ${DEV_CERT_PASSWORD:-dev-cert-password}
+  Authentication__Authority: http://keycloak:8080/realms/superapp
+  Authentication__RequireHttpsMetadata: "false"
+  ConnectionStrings__Gateway: "Server=mssql,1433;Database=SuperApp;User Id=gateway_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+  ConnectionStrings__Redis: redis:6379
+  <<: *analytics-env
+
+services:
+  # ---------------------------------------------------------------- infrastruktura (zawsze)
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Jeden issuer dla przeglądarki i kontenerów: adresy frontowe (issuer, logowanie) wskazują localhost:8081,
+      # a kontenery pobierają metadane, klucze i tokeny przez http://keycloak:8080.
+      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    ports:
+      - "8081:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./keycloak/realm-superapp.json:/opt/keycloak/data/import/realm-superapp.json:ro
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${DB_SA_PASSWORD:-Dev!Passw0rd1}
+    ports:
+      - "1433:1433"
+    # Logs in only after startup recovery has finished (the errorlog is UTF-16; tr drops its NUL bytes): an earlier sqlcmd login fails with
+    # "Login failed for user 'sa'. Reason: An error occurred while evaluating the password" in the server log.
+    healthcheck:
+      test: ["CMD-SHELL", "tr -d '[:cntrl:]' < /var/opt/mssql/log/errorlog | grep -q 'Recovery is complete' && /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 5s
+      retries: 30
+    volumes:
+      - mssql-data:/var/opt/mssql
+
+  # Baza SuperApp, loginy {serwis}_app i superapp_migrator, schematy i role (ADR-0021); jednorazowo przy starcie.
+  db-bootstrap:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    entrypoint: ["/bin/bash", "/db/bootstrap.sh"]
+    environment:
+      DB_SA_PASSWORD: ${DB_SA_PASSWORD:-Dev!Passw0rd1}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-Dev!Passw0rd1}
+    volumes:
+      - ./db:/db:ro
+      - ../sql:/sql:ro
+    depends_on:
+      mssql:
+        condition: service_healthy
+    restart: "no"
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 30
+
+  # ---------------------------------------------------------------- aplikacja (profil app)
+  migrator:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Migrator/SuperApp.Migrator/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__Migrator: "Server=mssql,1433;Database=SuperApp;User Id=superapp_migrator;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # Konfiguracja tras tylko do odczytu dla bramy (ADR-0022); po migracjach schematu gateway.
+  db-gateway-permissions:
+    profiles: [app]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -C -b -S mssql -U sa -P \"$$DB_SA_PASSWORD\" -d SuperApp -i /sql/02-gateway-config-permissions.sql"]
+    environment:
+      DB_SA_PASSWORD: ${DB_SA_PASSWORD:-Dev!Passw0rd1}
+    volumes:
+      - ../sql:/sql:ro
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    restart: "no"
+
+  knowledge-api:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Services/Knowledge/Knowledge.Api/Dockerfile
+    environment:
+      <<: *service-env
+      ConnectionStrings__Write: "Server=mssql,1433;Database=SuperApp;User Id=knowledge_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+      ConnectionStrings__Read: "Server=mssql,1433;Database=SuperApp;User Id=knowledge_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+    ports:
+      - "5101:8080"
+    networks:
+      default:
+        # Ten sam adres co Service w klastrze: trasy bramy z migracji działają lokalnie bez zmian (ADR-0022).
+        aliases: [knowledge-api.knowledge.svc.cluster.local]
+    depends_on: *service-deps
+
+  knowledge-worker:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Services/Knowledge/Knowledge.Worker/Dockerfile
+    environment:
+      <<: *service-env
+      ConnectionStrings__Write: "Server=mssql,1433;Database=SuperApp;User Id=knowledge_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+      ConnectionStrings__Read: "Server=mssql,1433;Database=SuperApp;User Id=knowledge_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+    depends_on: *service-deps
+
+  sleepdiary-api:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Services/SleepDiary/SleepDiary.Api/Dockerfile
+    environment:
+      <<: *service-env
+      ConnectionStrings__Write: "Server=mssql,1433;Database=SuperApp;User Id=sleepdiary_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+      ConnectionStrings__Read: "Server=mssql,1433;Database=SuperApp;User Id=sleepdiary_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+    ports:
+      - "5102:8080"
+    networks:
+      default:
+        aliases: [sleepdiary-api.sleepdiary.svc.cluster.local]
+    depends_on: *service-deps
+
+  sleepdiary-worker:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Services/SleepDiary/SleepDiary.Worker/Dockerfile
+    environment:
+      <<: *service-env
+      ConnectionStrings__Write: "Server=mssql,1433;Database=SuperApp;User Id=sleepdiary_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+      ConnectionStrings__Read: "Server=mssql,1433;Database=SuperApp;User Id=sleepdiary_app;Password=${DB_APP_PASSWORD:-Dev!Passw0rd1};TrustServerCertificate=True"
+    depends_on: *service-deps
+
+  # BFF experience Example (ADR-0038): jedyne wejście experience za bramą; woła serwisy domenowe z tokenem użytkownika (ADR-0040).
+  example-bff:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Bff/Example.Bff/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Authentication__Authority: http://keycloak:8080/realms/superapp
+      Authentication__RequireHttpsMetadata: "false"
+      Downstream__Knowledge__BaseAddress: http://knowledge-api.knowledge.svc.cluster.local:8080
+      Downstream__SleepDiary__BaseAddress: http://sleepdiary-api.sleepdiary.svc.cluster.local:8080
+    ports:
+      - "5120:8080"
+    networks:
+      default:
+        aliases: [example-bff.example.svc.cluster.local]
+    depends_on:
+      knowledge-api:
+        condition: service_started
+      sleepdiary-api:
+        condition: service_started
+      keycloak:
+        condition: service_started
+
+  bff-web:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Gateway/SuperApp.Gateway/Dockerfile
+    environment:
+      <<: *gateway-env
+      Gateway__Profile: bff-web
+      Authentication__ClientId: bff-web
+      Authentication__ClientSecret: dev-bff-web-secret
+      Authentication__Scopes__0: knowledge.catalog.read
+      Authentication__Scopes__1: knowledge.catalog.write
+      Authentication__Scopes__2: knowledge.library.read
+      Authentication__Scopes__3: knowledge.library.write
+      Authentication__Scopes__4: sleepdiary.entry.read
+      Authentication__Scopes__5: sleepdiary.entry.write
+    ports:
+      - "5001:8443"
+      # Back-channel logout z Keycloaka: http://host.docker.internal:5000 (adres z realmu, ten sam dla bramy z IDE).
+      - "5000:8080"
+    volumes:
+      - ./certs:/certs:ro
+    depends_on:
+      db-gateway-permissions:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+  gateway-mobile:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Gateway/SuperApp.Gateway/Dockerfile
+    environment:
+      <<: *gateway-env
+      Gateway__Profile: gateway-mobile
+      Authentication__Audience: gateway-mobile
+    ports:
+      - "5002:8443"
+    volumes:
+      - ./certs:/certs:ro
+    depends_on:
+      db-gateway-permissions:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+  # Forwarder analityki (ADR-0036): zdarzenia integracyjne -> PostHog; bez ANALYTICS_PROJECT_TOKEN tylko loguje nazwy zdarzeń (EventId 9001).
+  analytics-forwarder:
+    profiles: [app]
+    build:
+      context: ../..
+      dockerfile: src/Analytics/SuperApp.AnalyticsForwarder/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__RabbitMq: amqp://guest:guest@rabbitmq:5672/
+      <<: *analytics-env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  mssql-data:

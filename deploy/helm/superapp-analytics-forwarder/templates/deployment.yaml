@@ -1,0 +1,81 @@
+{{- $name := "analytics-forwarder" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "superapp.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "superapp.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+        superapp.example/experience-role: worker
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "app.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: forwarder
+          image: "{{ .Values.image.registry }}/{{ $name }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.endpoint | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ required "secretName jest wymagane" .Values.secretName }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- include "app.containerSecurityContext" . | nindent 12 }}
+          {{- include "superapp.probes" . | nindent 10 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+{{- if and .Values.keda.enabled .Values.keda.queues }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ $name }}
+spec:
+  scaleTargetRef:
+    name: {{ $name }}
+  minReplicaCount: {{ .Values.keda.minReplicas }}
+  maxReplicaCount: {{ .Values.keda.maxReplicas }}
+  triggers:
+    {{- range .Values.keda.queues }}
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        mode: QueueLength
+        value: {{ $.Values.keda.queueLength | quote }}
+        queueName: {{ . }}
+      authenticationRef:
+        name: {{ $.Values.keda.triggerAuthentication }}
+    {{- end }}
+{{- end }}

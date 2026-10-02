@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of command handlers and domain event handlers with fake ports (FakeClock, FakeCurrentUser, ...), no database (architecture rules section 15). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <!-- DI container and logging, to run handlers through the real MediatR pipeline with fake ports. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ServiceName.Application\ServiceName.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\Framework\SuperApp.Framework.Testing\SuperApp.Framework.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

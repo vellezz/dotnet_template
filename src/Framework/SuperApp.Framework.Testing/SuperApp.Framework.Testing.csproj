@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pomocnicy testów dla typów frameworka (ADR-0047); referowany wyłącznie przez projekty testów, nigdy przez kod produkcyjny. -->
+  <PropertyGroup>
+    <RootNamespace>SuperApp.Framework.Testing</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SuperApp.Framework.Domain\SuperApp.Framework.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

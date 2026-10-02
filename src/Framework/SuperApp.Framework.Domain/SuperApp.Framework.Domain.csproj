@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SuperApp.Framework.Domain</RootNamespace>
+  </PropertyGroup>
+
+</Project>

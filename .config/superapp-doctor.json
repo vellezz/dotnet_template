@@ -1,0 +1,21 @@
+{
+  // Exceptions of `dotnet superapp doctor` (ADR-0046). Each entry is a fragment of a repository path that the documentation
+  // mentions on purpose although the file does not exist; the doc-paths rule skips paths containing it.
+  "ignoredPathFragments": [
+    // Example service and experience of recipes 07 and 11: the reader creates them.
+    "Billing",
+    "billing",
+    "Coaching",
+    "coaching",
+    // Rating feature of the tutorial (chapter 16) and recipe 03: the reader creates it.
+    "Ratings/",
+    "MaterialRating",
+    "RateMaterial",
+    // Template placeholders of `dotnet new superapp-service` / `superapp-bff`.
+    "ServiceName",
+    "ExperienceName",
+    // Local files ignored by git and created on each machine: secrets from .env.example and the certificate from dev-cert.ps1/.sh.
+    "deploy/local/.env",
+    "deploy/local/certs/"
+  ]
+}

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Domain zależy wyłącznie od SuperApp.Framework.Domain (ADR-0002). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Framework\SuperApp.Framework.Domain\SuperApp.Framework.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

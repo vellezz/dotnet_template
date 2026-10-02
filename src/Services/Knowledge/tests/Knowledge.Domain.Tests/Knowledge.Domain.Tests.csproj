@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Testy domeny: jednostkowo, bez mocków (zasady architektury §15). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Knowledge.Domain\Knowledge.Domain.csproj" />
+    <ProjectReference Include="..\..\..\..\Framework\SuperApp.Framework.Testing\SuperApp.Framework.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Domain depends only on SuperApp.Framework.Domain: no EF Core, MediatR, MassTransit, ASP.NET or Refit (ADR-0002). Do not add package references. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Framework\SuperApp.Framework.Domain\SuperApp.Framework.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

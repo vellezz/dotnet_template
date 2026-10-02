@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Published language of the service: integration events other services consume, shipped as a versioned NuGet package.
+    Only primitive property types (no IDs or value objects, architecture test 4), no reference to Domain; changes must be
+    backward compatible, a breaking change means a new event type (ADR-0005, ADR-0024). Bump Version on every change.
+  -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

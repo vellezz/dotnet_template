@@ -1,0 +1,4 @@
+profile: gateway-mobile
+secretName: gateway-mobile-secrets
+authentication:
+  audience: gateway-mobile

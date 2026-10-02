@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Application team",
+  "classifications": [ "SuperApp", "Service", "DDD" ],
+  "identity": "SuperApp.Service.Template",
+  "name": "SuperApp domain service (Clean DDD + CQRS)",
+  "description": "All projects of a domain service following the architecture rules (ADR-0030). Generate into src/Services/{Name}.",
+  "shortName": "superapp-service",
+  "sourceName": "ServiceName",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "apiPort": {
+      "type": "parameter",
+      "datatype": "integer",
+      "defaultValue": "5190",
+      "replaces": "5190",
+      "description": "Local HTTP port of the Api (launch profile and docker compose); dotnet superapp add service picks a free one."
+    },
+    "workerPort": {
+      "type": "parameter",
+      "datatype": "integer",
+      "defaultValue": "5191",
+      "replaces": "5191",
+      "description": "Local HTTP port of the Worker launch profile."
+    },
+    "serviceNameLower": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "lowerCase",
+      "replaces": "servicename",
+      "fileRename": "servicename"
+    }
+  },
+  "sources": [
+    {
+      "exclude": [ "**/bin/**", "**/obj/**", ".template.config/**" ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+profile: bff-web
+secretName: bff-web-secrets
+dataProtection:
+  certificateSecretName: bff-web-data-protection
+authentication:
+  clientId: bff-web
+  scopes:
+    - knowledge.catalog.read
+    # Nadawany przez CIAM wyłącznie redaktorom (rola), więc BFF może o niego prosić dla wszystkich.
+    - knowledge.catalog.write
+    - knowledge.library.read
+    - knowledge.library.write
+    - sleepdiary.entry.read
+    - sleepdiary.entry.write

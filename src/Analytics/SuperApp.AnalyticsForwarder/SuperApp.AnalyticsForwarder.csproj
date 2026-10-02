@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Framework\SuperApp.Framework.Infrastructure\SuperApp.Framework.Infrastructure.csproj" />
+    <!-- Published language of the services (integration events), ADR-0036: the forwarder depends on no other layer of any service. -->
+    <ProjectReference Include="..\..\Services\Knowledge\Knowledge.Contracts\Knowledge.Contracts.csproj" />
+    <ProjectReference Include="..\..\Services\SleepDiary\SleepDiary.Contracts\SleepDiary.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PostHog" />
+  </ItemGroup>
+
+</Project>

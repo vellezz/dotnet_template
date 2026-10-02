@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "bff-web": {
+      "commandName": "Project",
+      "applicationUrl": "https://localhost:5001;http://localhost:5000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Gateway__Profile": "bff-web",
+        "Authentication__ClientId": "bff-web",
+        "Authentication__ClientSecret": "dev-bff-web-secret",
+        "Authentication__Scopes__0": "knowledge.catalog.read",
+        "Authentication__Scopes__1": "knowledge.catalog.write",
+        "Authentication__Scopes__2": "knowledge.library.read",
+        "Authentication__Scopes__3": "knowledge.library.write",
+        "Authentication__Scopes__4": "sleepdiary.entry.read",
+        "Authentication__Scopes__5": "sleepdiary.entry.write"
+      }
+    },
+    "gateway-mobile": {
+      "commandName": "Project",
+      "applicationUrl": "https://localhost:5002",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Gateway__Profile": "gateway-mobile",
+        "Authentication__Audience": "gateway-mobile"
+      }
+    }
+  }
+}

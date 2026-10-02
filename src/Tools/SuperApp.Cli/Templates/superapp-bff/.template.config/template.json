@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Application team",
+  "classifications": [ "SuperApp", "BFF", "Experience" ],
+  "identity": "SuperApp.Bff.Template",
+  "name": "SuperApp experience BFF",
+  "description": "BFF of an experience (ADR-0038): public API for the module and internal API for other experiences, no database. Generate into src/Bff.",
+  "shortName": "superapp-bff",
+  "sourceName": "ExperienceName",
+  "preferNameDirectory": false,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "port": {
+      "type": "parameter",
+      "datatype": "integer",
+      "defaultValue": "5192",
+      "replaces": "5192",
+      "description": "Local HTTP port of the BFF (launch profile and docker compose); dotnet superapp add bff picks a free one."
+    },
+    "experienceNameLower": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "lowerCase",
+      "replaces": "experiencename",
+      "fileRename": "experiencename"
+    }
+  },
+  "sources": [
+    {
+      "exclude": [ "**/bin/**", "**/obj/**", ".template.config/**", "**/openapi/**" ]
+    }
+  ]
+}

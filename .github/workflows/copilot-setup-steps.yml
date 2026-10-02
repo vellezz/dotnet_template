@@ -1,0 +1,25 @@
+# Environment of the GitHub Copilot coding agent: .NET SDK from global.json and the local tools, including `dotnet superapp`
+# (ADR-0046), so the agent can build, test and run `dotnet superapp doctor` before handing over a change.
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  # The job name is fixed: Copilot runs only a job called copilot-setup-steps.
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build and restore local tools (dotnet-ef, refitter, superapp)
+        run: bash tools/bootstrap.sh
+      - name: Check repository consistency
+        run: dotnet superapp doctor

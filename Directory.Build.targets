@@ -1,0 +1,69 @@
+<Project>
+
+  <!--
+    OpenAPI contract descriptions from referenced projects (ADR-0019, ADR-0033).
+
+    The XML comment generator of Microsoft.AspNetCore.OpenApi reads only the XML documentation of the project being compiled, plus any
+    XML documentation files passed to the compiler as AdditionalFiles. Commands, queries and DTOs of an Api live in the Application
+    project (and shared types such as PagedResult in SuperApp.Framework.Application, enums in Domain), so without this target their schemas
+    in the committed contract have no descriptions.
+
+    Defined once here (not per Api csproj) so every Api that generates a contract, including services created from the superapp-service
+    template, gets it without extra configuration. It runs after ResolveReferences and adds the documentation file next to each
+    referenced project's assembly. Infrastructure projects are skipped: by the dependency rule their types never appear in the
+    contract (the Api references them only as the composition root), and their documentation would only enlarge the generated code.
+    A missing file (e.g. a project without GenerateDocumentationFile) is skipped silently.
+  -->
+  <Target Name="AddReferencedXmlDocsForOpenApi"
+          AfterTargets="ResolveReferences"
+          BeforeTargets="CoreCompile"
+          Condition="'$(OpenApiGenerateDocuments)' == 'true'">
+    <ItemGroup>
+      <_OpenApiReferencedXmlDoc Include="@(ReferencePath->'%(RootDir)%(Directory)%(Filename).xml')"
+                                Condition="'%(ReferencePath.ReferenceSourceTarget)' == 'ProjectReference' AND !$([System.String]::Copy('%(ReferencePath.Filename)').EndsWith('.Infrastructure'))" />
+      <AdditionalFiles Include="@(_OpenApiReferencedXmlDoc)" Condition="Exists('%(_OpenApiReferencedXmlDoc.Identity)')" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    OpenAPI 3.0 version label of the committed contract (ADR-0019).
+
+    Microsoft.OpenApi 2.x writes the newest 3.0 patch, "3.0.4" (October 2024), for OpenApiSpecVersion.OpenApi3_0. The 3.0.4 patch only
+    clarifies the specification text and changes nothing in the document structure, but some tools recognize 3.0.x by an exact list of
+    known versions (3.0.0-3.0.3) and reject or mis-render 3.0.4: the OpenAPI support in JetBrains Rider and older client generators.
+    The committed contract is therefore labelled "3.0.3", which every tool understands and which describes exactly the same document.
+    Runs after the build-time generator (Microsoft.Extensions.ApiDescription.Server) and rewrites only the version field.
+  -->
+  <UsingTask TaskName="SetOpenApiVersionLabel" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <Version ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        foreach (var file in Files)
+        {
+            var path = file.ItemSpec;
+            var text = File.ReadAllText(path);
+            var updated = Regex.Replace(text, @"""openapi""\s*:\s*""3\.0\.\d+""", @"""openapi"": """ + Version + @"""", RegexOptions.None, TimeSpan.FromSeconds(1));
+            if (updated != text)
+            {
+                File.WriteAllText(path, updated);
+            }
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="SetOpenApiContractVersionLabel"
+          AfterTargets="GenerateOpenApiDocuments"
+          Condition="'$(OpenApiGenerateDocuments)' == 'true'">
+    <ItemGroup>
+      <_OpenApiContract Include="$(OpenApiDocumentsDirectory)/*.json" />
+    </ItemGroup>
+    <SetOpenApiVersionLabel Files="@(_OpenApiContract)" Version="3.0.3" Condition="'@(_OpenApiContract)' != ''" />
+  </Target>
+
+</Project>

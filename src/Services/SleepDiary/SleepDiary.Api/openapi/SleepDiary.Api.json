@@ -1,0 +1,671 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SleepDiary.Api | v1",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/entries": {
+      "get": {
+        "tags": [
+          "SleepEntries"
+        ],
+        "summary": "Returns the caller's diary entries in a date range, with the average sleep time and quality.",
+        "description": "Required scope: `sleepdiary.entry.read`. The range is inclusive on both ends, matched against the entry date, and may cover at most\r\n366 days. Days without an entry are omitted and do not affect the averages.",
+        "operationId": "SleepEntries_List",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First day of the range (inclusive), `YYYY-MM-DD`.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last day of the range (inclusive), `YYYY-MM-DD`; not earlier than from and at most 365 days after it.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid range (`validation.failed`): to is before from or the range is longer than 366 days.\r\nA date that is not in the `YYYY-MM-DD` format is rejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token."
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.read` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The diary for the range; `entries` is empty and both averages are `null` when there are no entries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SleepDiaryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/entries/{date}": {
+      "get": {
+        "tags": [
+          "SleepEntries"
+        ],
+        "summary": "Returns the caller's diary entry for one day.",
+        "description": "Required scope: `sleepdiary.entry.read`.",
+        "operationId": "SleepEntries_Get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Entry date (the day the user woke up), `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "The date is not in the `YYYY-MM-DD` format.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token."
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.read` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The entry for the day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SleepEntryDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no entry for this day (`sleepdiary.entry.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "SleepEntries"
+        ],
+        "summary": "Records a new diary entry for the given day.",
+        "description": "Required scope: `sleepdiary.entry.write`. One entry per day: to change an existing entry use `PUT`. The date may be at most\r\none day after today in UTC (tolerance for time zones ahead of UTC). Time in bed and sleep time (time in bed minus the time to fall asleep)\r\nare computed by the service. Recording an entry publishes the integration event `SleepEntryRecordedV1` for other services.",
+        "operationId": "SleepEntries_Record",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Entry date (the day the user woke up), `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The night's data.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepEntryRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepEntryRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid data. `validation.failed`: quality outside 1–5, awakenings outside 0–50, negative time to fall asleep, note longer than\r\n2000 characters. A malformed date or body is rejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044).\r\nBusiness rules: `sleepdiary.entry.future_date` (date too far in the future),\r\n`sleepdiary.entry.wake_before_bed` (wake-up not after bedtime), `sleepdiary.entry.wake_date_mismatch` (wake-up day differs\r\nfrom the entry date), `sleepdiary.entry.too_long` (more than 24 hours in bed), `sleepdiary.entry.invalid_latency`\r\n(time to fall asleep longer than the time in bed).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token."
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.write` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The entry was recorded; the body contains its identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller already has an entry for this day (`sleepdiary.entry.already_exists`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "SleepEntries"
+        ],
+        "summary": "Replaces all data of the caller's existing diary entry for the given day.",
+        "description": "Required scope: `sleepdiary.entry.write`. A full replacement: every field is overwritten and an omitted or blank note removes the\r\nexisting one. The entry date cannot be changed; delete the entry and record a new one instead. Computed values are recalculated.\r\nNo integration event is published. When the request is rejected the entry stays unchanged.",
+        "operationId": "SleepEntries_Update",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Entry date (the day the user woke up), `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The new data of the night.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepEntryRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepEntryRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SleepEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid data. `validation.failed`: quality outside 1–5, awakenings outside 0–50, negative time to fall asleep, note longer than\r\n2000 characters. A malformed date or body is rejected by the framework with a validation problem with `code` `request.malformed` (ADR-0044). Business rules: `sleepdiary.entry.wake_before_bed`,\r\n`sleepdiary.entry.wake_date_mismatch`, `sleepdiary.entry.too_long`, `sleepdiary.entry.invalid_latency`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token."
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.write` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "The entry was updated."
+          },
+          "404": {
+            "description": "The caller has no entry for this day (`sleepdiary.entry.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The entry was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "SleepEntries"
+        ],
+        "summary": "Permanently deletes the caller's diary entry for the given day.",
+        "description": "Required scope: `sleepdiary.entry.write`. A new entry can be recorded for the same day afterwards. Other services are not notified.",
+        "operationId": "SleepEntries_Delete",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Entry date (the day the user woke up), `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "The date is not in the `YYYY-MM-DD` format.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid access token."
+          },
+          "403": {
+            "description": "The token lacks the scope `sleepdiary.entry.write` (`auth.missing_scope`) or does not identify a user (`auth.unauthenticated`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "The entry was deleted."
+          },
+          "404": {
+            "description": "The caller has no entry for this day (`sleepdiary.entry.not_found`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The entry was changed by another request between reading and saving (`persistence.concurrency_conflict`);\r\nreload it and retry.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreatedResponse": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Technical identifier of the new entry (GUID). The entry is addressed by its date in all other endpoints; the identifier is informational\r\nand matches `entryId` of the `SleepEntryRecordedV1` integration event.",
+            "format": "uuid"
+          }
+        },
+        "description": "Response body of `201 Created` after a new sleep diary entry was recorded."
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable, machine-readable error code, e.g. knowledge.material.archived; clients branch on it (ADR-0015)."
+          },
+          "traceId": {
+            "type": "string",
+            "description": "Trace identifier of the request, used to find its traces and logs."
+          }
+        }
+      },
+      "SleepDiaryDto": {
+        "required": [
+          "from",
+          "to",
+          "entries",
+          "averageSleepMinutes",
+          "averageQuality"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "First day of the range (inclusive), echoed from the query.",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "description": "Last day of the range (inclusive), echoed from the query.",
+            "format": "date"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SleepEntryDto"
+            },
+            "description": "Entries whose date falls in the range, sorted by date ascending; an empty list when there are none."
+          },
+          "averageSleepMinutes": {
+            "type": "number",
+            "description": "Mean of int SleepEntryDto.SleepMinutes over Entries, in minutes, rounded to 1 decimal place;\r\n`null` when there are no entries.",
+            "format": "double",
+            "nullable": true
+          },
+          "averageQuality": {
+            "type": "number",
+            "description": "Mean of int SleepEntryDto.Quality (scale 1–5) over Entries, rounded to 2 decimal places;\r\n`null` when there are no entries.",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "description": "The current user's sleep diary for a range of days: the entries in the range and averages computed from them. Result of ListSleepEntries."
+      },
+      "SleepEntryDto": {
+        "required": [
+          "id",
+          "date",
+          "bedTime",
+          "wakeTime",
+          "sleepLatencyMinutes",
+          "awakenings",
+          "quality",
+          "notes",
+          "timeInBedMinutes",
+          "sleepMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Technical identifier of the entry (GUID). Entries are addressed by Date in the API.",
+            "format": "uuid"
+          },
+          "date": {
+            "type": "string",
+            "description": "Entry date: the day the user woke up.",
+            "format": "date"
+          },
+          "bedTime": {
+            "type": "string",
+            "description": "When the user went to bed, local time without a time zone (usually on the day before Date).",
+            "format": "date-time"
+          },
+          "wakeTime": {
+            "type": "string",
+            "description": "When the user got up, local time without a time zone; always later than BedTime and on the day Date.",
+            "format": "date-time"
+          },
+          "sleepLatencyMinutes": {
+            "type": "integer",
+            "description": "How long it took to fall asleep, in minutes; between 0 and TimeInBedMinutes.",
+            "format": "int32"
+          },
+          "awakenings": {
+            "type": "integer",
+            "description": "Number of awakenings during the night, from 0 to 50.",
+            "format": "int32"
+          },
+          "quality": {
+            "type": "integer",
+            "description": "Subjective sleep quality, from 1 (worst) to 5 (best).",
+            "format": "int32"
+          },
+          "notes": {
+            "type": "string",
+            "description": "The user's note, trimmed; `null` when there is none.",
+            "nullable": true
+          },
+          "timeInBedMinutes": {
+            "type": "integer",
+            "description": "Derived time in bed in whole minutes, from BedTime to WakeTime; at most 1440.",
+            "format": "int32"
+          },
+          "sleepMinutes": {
+            "type": "integer",
+            "description": "Derived sleep time in minutes: TimeInBedMinutes minus SleepLatencyMinutes.",
+            "format": "int32"
+          }
+        },
+        "description": "One sleep diary entry as returned by the API, by GetSleepEntry and inside `SleepDiaryDto`."
+      },
+      "SleepEntryRequest": {
+        "required": [
+          "bedTime",
+          "wakeTime",
+          "sleepLatencyMinutes",
+          "awakenings",
+          "quality",
+          "notes"
+        ],
+        "type": "object",
+        "properties": {
+          "bedTime": {
+            "type": "string",
+            "description": "When the user went to bed, local date and time without an offset, e.g. `2026-09-29T23:15:00`; a value with `Z` or an offset\r\nis rejected (HTTP 400).",
+            "format": "date-time"
+          },
+          "wakeTime": {
+            "type": "string",
+            "description": "When the user got up, local date and time without an offset (a value with `Z` or an offset is rejected, HTTP 400). Must be later than BedTime, on the same calendar day as the\r\nentry date in the URL, and at most 24 hours after BedTime.",
+            "format": "date-time"
+          },
+          "sleepLatencyMinutes": {
+            "type": "integer",
+            "description": "How long it took to fall asleep, in minutes; from 0 up to the time between bedtime and wake-up.",
+            "format": "int32"
+          },
+          "awakenings": {
+            "type": "integer",
+            "description": "Number of times the user woke up during the night, from 0 to 50.",
+            "format": "int32"
+          },
+          "quality": {
+            "type": "integer",
+            "description": "Subjective sleep quality, an integer from 1 (worst) to 5 (best).",
+            "format": "int32"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional note of at most 2000 characters after removing leading and trailing whitespace, and stored that way. `null`, empty or whitespace-only text means\r\nno note; on `PUT` it removes an existing note.",
+            "nullable": true
+          }
+        },
+        "description": "Data of one night in the sleep diary, sent when recording (`POST`) or replacing (`PUT`) an entry. The entry date is taken from the URL."
+      },
+      "ValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable, machine-readable error code, e.g. knowledge.material.archived; clients branch on it (ADR-0015)."
+          },
+          "traceId": {
+            "type": "string",
+            "description": "Trace identifier of the request, used to find its traces and logs."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "JWT access token issued by the CIAM, passed unchanged by the edge gateway and BFF.",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "SleepEntries"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Published language: primitive types only, versioned event types (ADR-0005, ADR-0024). -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

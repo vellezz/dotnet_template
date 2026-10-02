@@ -1,0 +1,22 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+TestResults/
+*.swp
+.DS_Store
+
+# Lokalne środowisko: sekrety i certyfikat deweloperski (ADR-0034)
+deploy/local/.env
+deploy/local/certs/
+
+# Narzędzie superapp: pakiety budowane lokalnie przez tools/bootstrap (ADR-0046)
+tools/packages/*.nupkg
+
+# Artefakty narzędzia superapp (np. skrypt migracji dla DBA)
+artifacts/
+
+# Instrukcje asystenta: tylko lokalnie
+CLAUDE.md

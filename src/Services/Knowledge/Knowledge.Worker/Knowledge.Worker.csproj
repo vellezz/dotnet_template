@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Knowledge.Application\Knowledge.Application.csproj" />
+    <!-- Composition root only (ADR-0002). -->
+    <ProjectReference Include="..\Knowledge.Infrastructure\Knowledge.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

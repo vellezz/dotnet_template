@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Testy handlerów komend i zdarzeń domenowych z fake'ami portów (zasady architektury §15). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <!-- Kontener DI i logging do testów pipeline MediatR z fake'ami portów. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SleepDiary.Application\SleepDiary.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\Framework\SuperApp.Framework.Testing\SuperApp.Framework.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

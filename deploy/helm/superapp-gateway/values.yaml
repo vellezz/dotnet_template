@@ -1,0 +1,46 @@
+# Brama YARP; profil wybiera zachowanie (ADR-0006): bff-web lub gateway-mobile.
+profile: bff-web
+
+image:
+  registry: registry.example.local/app
+  repository: superapp-gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Secret z External Secrets (ADR-0016). Wymagane klucze:
+#   ConnectionStrings__Gateway, ConnectionStrings__Redis, Authentication__ClientSecret (tylko bff-web)
+# Analityka (ADR-0036), gdy włączona: Analytics__ProjectToken, Analytics__IdKey (ten sam co w serwisach i forwarderze). bff-web wystawia
+# wtedy proxy /ingest do PostHog Cloud EU, gateway-mobile endpoint GET /analytics/id.
+secretName: ""
+
+authentication:
+  authority: ""
+  clientId: bff-web
+  # gateway-mobile: audience tokenów aplikacji mobilnych.
+  audience: ""
+  scopes: []
+
+# Certyfikat szyfrujący klucze Data Protection w spoczynku (tylko bff-web, ADR-0013).
+# Secret z kluczem certificate.pfx; hasło w secretName pod kluczem DataProtection__CertificatePassword.
+dataProtection:
+  certificateSecretName: ""
+
+ingress:
+  className: nginx
+  host: ""
+  tlsSecretName: ""
+
+otel:
+  endpoint: http://otel-collector.observability.svc.cluster.local:4317
+
+replicas: 2
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { memory: 512Mi }
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+terminationGracePeriodSeconds: 30

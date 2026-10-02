@@ -1,0 +1,8 @@
+# Experience przykładowa (ADR-0038); w docelowym wdrożeniu nazwa experience zespołu.
+experience: example
+service: sleepdiary
+secretName: sleepdiary-secrets
+worker:
+  # Serwis nie konsumuje jeszcze zdarzeń; Worker dostarcza outbox.
+  keda:
+    enabled: false

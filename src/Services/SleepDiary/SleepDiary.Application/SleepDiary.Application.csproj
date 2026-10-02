@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Framework\SuperApp.Framework.Application\SuperApp.Framework.Application.csproj" />
+    <ProjectReference Include="..\SleepDiary.Domain\SleepDiary.Domain.csproj" />
+    <ProjectReference Include="..\SleepDiary.Contracts\SleepDiary.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SleepDiary.Application.Tests" />
+    <InternalsVisibleTo Include="SleepDiary.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,5 @@
+experience: example
+secretName: example-bff-secrets
+downstream:
+  Knowledge: http://knowledge-api.knowledge.svc.cluster.local:8080
+  SleepDiary: http://sleepdiary-api.sleepdiary.svc.cluster.local:8080

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: superapp-analytics-forwarder
+description: Forwarder analityki produktowej (zdarzenia integracyjne -> PostHog Cloud EU), bez bazy i bez API (ADR-0036).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

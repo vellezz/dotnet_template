@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Developer tool of the repository (ADR-0046): `dotnet superapp doctor|list|info|add|remove ...`.
+    Distributed as a local .NET tool: `tools/bootstrap.ps1` / `tools/bootstrap.sh` packs it into tools/packages (a NuGet source in
+    nuget.config) and runs `dotnet tool restore` (manifest .config/dotnet-tools.json). Every change of the tool raises <Version> here and
+    in the manifest; `dotnet superapp doctor` checks that both agree.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SuperApp.Cli</RootNamespace>
+    <!-- Program name shown in the help output: "superapp [command] [options]". -->
+    <AssemblyName>superapp</AssemblyName>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>superapp</ToolCommandName>
+    <PackageId>SuperApp.Cli</PackageId>
+    <Version>0.6.3</Version>
+    <Description>Developer tool of the SuperApp repository: consistency checks, an overview, and adding or removing services, BFFs and service clients.</Description>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)../../../tools/packages</PackageOutputPath>
+    <IsPackable>true</IsPackable>
+    <!-- Templates/ holds the dotnet new templates the tool instantiates (add service, add bff): content, never compiled or packed. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Templates/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SuperApp.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

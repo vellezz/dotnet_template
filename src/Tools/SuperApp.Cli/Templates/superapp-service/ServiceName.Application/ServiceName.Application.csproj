@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Framework\SuperApp.Framework.Application\SuperApp.Framework.Application.csproj" />
+    <ProjectReference Include="..\ServiceName.Domain\ServiceName.Domain.csproj" />
+    <ProjectReference Include="..\ServiceName.Contracts\ServiceName.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ServiceName.Application.Tests" />
+    <InternalsVisibleTo Include="ServiceName.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

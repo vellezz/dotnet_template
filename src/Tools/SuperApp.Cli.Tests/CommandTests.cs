@@ -1,0 +1,62 @@
+using System.CommandLine;
+using System.Text.Json;
+using SuperApp.Cli.Repository;
+
+namespace SuperApp.Cli.Tests;
+
+/// <summary>The commands run end to end on the real repository: exit codes, JSON output and errors for unknown names.</summary>
+public sealed class CommandTests
+{
+    private static readonly string Root = RepositoryRoot.Find(AppContext.BaseDirectory)
+        ?? throw new InvalidOperationException("Tests must run inside the repository.");
+
+    [Fact]
+    public async Task List_services_as_json_describes_every_service()
+    {
+        var (exitCode, output, _) = await Run("list", "services", "--json");
+
+        Assert.Equal(ExitCodes.Success, exitCode);
+        using var document = JsonDocument.Parse(output);
+        var names = document.RootElement.EnumerateArray().Select(service => service.GetProperty("name").GetString()).ToList();
+        Assert.Contains("Knowledge", names);
+        Assert.Contains("SleepDiary", names);
+    }
+
+    [Fact]
+    public async Task Info_of_a_bff_lists_its_clients()
+    {
+        var (exitCode, output, _) = await Run("info", "Example.Bff", "--json");
+
+        Assert.Equal(ExitCodes.Success, exitCode);
+        using var document = JsonDocument.Parse(output);
+        Assert.Equal("example", document.RootElement.GetProperty("experience").GetString());
+        Assert.Contains("Knowledge", document.RootElement.GetProperty("clients").EnumerateArray().Select(client => client.GetString()));
+    }
+
+    [Fact]
+    public async Task Info_of_an_unknown_name_exits_with_not_found()
+    {
+        var (exitCode, _, error) = await Run("info", "NoSuchService");
+
+        Assert.Equal(ExitCodes.NotFound, exitCode);
+        Assert.Contains("NoSuchService", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unknown_doctor_rule_is_an_invalid_argument()
+    {
+        var (exitCode, _, _) = await Run("doctor", "--rule", "no-such-rule");
+
+        Assert.Equal(ExitCodes.InvalidArguments, exitCode);
+    }
+
+    private static async Task<(int ExitCode, string Output, string Error)> Run(params string[] args)
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await CliApplication.Create()
+            .Parse([.. args, "--root", Root])
+            .InvokeAsync(new InvocationConfiguration { Output = output, Error = error }, TestContext.Current.CancellationToken);
+        return (exitCode, output.ToString(), error.ToString());
+    }
+}

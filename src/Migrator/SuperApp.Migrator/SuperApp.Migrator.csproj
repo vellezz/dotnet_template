@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The single migrator of the whole application (ADR-0004): a console app that applies the EF Core migrations of every
+    write context (each service's WriteDbContext and the gateway context). It references the Infrastructure projects only
+    to reach those contexts and their Migrations folders; it has no logic and must not be referenced by other projects.
+    Runs only on dev/test as the Kubernetes Job superapp-migrator before the rollout; on prod the DBA runs idempotent scripts instead.
+    Adding a new service: add a ProjectReference to its Infrastructure project here and register its context in Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Gateway\SuperApp.Gateway\SuperApp.Gateway.csproj" />
+    <ProjectReference Include="..\..\Services\Knowledge\Knowledge.Infrastructure\Knowledge.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Services\SleepDiary\SleepDiary.Infrastructure\SleepDiary.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

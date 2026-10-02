@@ -1,0 +1,15 @@
+{
+  "openApiPath": "../../../../Services/SleepDiary/SleepDiary.Api/openapi/SleepDiary.Api.json",
+  "namespace": "Example.Bff.Clients.SleepDiary",
+  "naming": { "useOpenApiTitle": false, "interfaceName": "SleepDiaryApi" },
+  "outputFolder": "./Generated",
+  "outputFilename": "SleepDiaryApi.cs",
+  "useCancellationTokens": true,
+  "returnIApiResponse": true,
+  "typeAccessibility": "Public",
+  "usePolymorphicSerialization": true,
+  "generateOperationHeaders": false,
+  "operationNameTemplate": "{operationName}Async",
+  "operationNameGenerator": "SingleClientFromOperationId",
+  "codeGeneratorSettings": { "dateType": "System.DateOnly", "dateTimeType": "System.DateTime", "timeType": "System.TimeOnly" }
+}

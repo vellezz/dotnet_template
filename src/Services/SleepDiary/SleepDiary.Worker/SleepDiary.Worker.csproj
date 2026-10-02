@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SleepDiary.Application\SleepDiary.Application.csproj" />
+    <!-- Wyłącznie composition root (ADR-0002). -->
+    <ProjectReference Include="..\SleepDiary.Infrastructure\SleepDiary.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

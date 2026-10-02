@@ -1,0 +1,55 @@
+# Wartości bazowe serwisu domenowego; nadpisywane plikiem values-<serwis>.yaml i wartościami środowiska w repozytorium GitOps.
+
+# Experience, do której należy komponent (ADR-0038, ADR-0041): etykieta app.kubernetes.io/part-of, na której opierają się selektory
+# NetworkPolicy działu infrastruktury. Etykieta superapp.example/experience-role (bff | domain-service | worker) jest ustawiana w szablonach.
+# Wymagane: pusta wartość przerywa renderowanie chartu, żeby żaden pod nie trafił poza polityki sieci.
+experience: ""
+
+# Nazwa serwisu w małych literach (knowledge, sleepdiary); prefiks nazw zasobów: <serwis>-api, <serwis>-worker.
+service: ""
+
+image:
+  registry: registry.example.local/app
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Secret tworzony przez External Secrets (dział infrastruktury, ADR-0016). Wymagane klucze:
+#   ConnectionStrings__Write, ConnectionStrings__Read, ConnectionStrings__RabbitMq, ConnectionStrings__Redis
+# Analityka i feature flags (ADR-0036), gdy włączone na środowisku: Analytics__ProjectToken, Analytics__IdKey (ten sam we wszystkich
+# procesach środowiska), opcjonalnie Analytics__FeatureFlagsKey (lokalna ewaluacja flag). Bez nich flagi pochodzą z konfiguracji (FeatureFlags__{klucz}), a w jej braku z wartości domyślnych w kodzie.
+secretName: ""
+
+authentication:
+  authority: ""
+
+otel:
+  endpoint: http://otel-collector.observability.svc.cluster.local:4317
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+worker:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  # Skalowanie po długości kolejek (KEDA dostarcza dział infrastruktury).
+  keda:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    queueLength: "50"
+    # Kolejki serwisu (konwencja MassTransit: <serwis>-<konsument>).
+    queues: []
+    # TriggerAuthentication z hostem RabbitMQ (secret infrastruktury).
+    triggerAuthentication: rabbitmq-trigger-auth
+
+terminationGracePeriodSeconds: 30

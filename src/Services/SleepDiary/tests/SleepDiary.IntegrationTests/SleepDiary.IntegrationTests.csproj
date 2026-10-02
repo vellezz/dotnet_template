@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Testy integracyjne z MSSQL w Testcontainers: migracje, repozytoria, handlery zapytań (zasady architektury §15). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Testcontainers.MsSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SleepDiary.Infrastructure\SleepDiary.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\..\Framework\SuperApp.Framework.Testing\SuperApp.Framework.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

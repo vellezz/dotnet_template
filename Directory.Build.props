@@ -1,0 +1,39 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Dokumentacja XML publicznego API: brak summary = CS1591, niekompletne tagi = APP006 (ADR-0033). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Known vulnerabilities in direct and transitive packages fail the build (warnings as errors); required by ADR-0035. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <!-- Komentarze XML kontrolerów w dokumencie OpenAPI (generator Microsoft.AspNetCore.OpenApi, ADR-0033). -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated</InterceptorsNamespaces>
+    <IsTestProject Condition="$(MSBuildProjectName.EndsWith('Tests'))">true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- Testy nie są API: bez wymogu dokumentacji XML (ADR-0033). -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <NoWarn>$(NoWarn);CS1591;APP006</NoWarn>
+    <!-- Wyniki testów w bin/ projektu, a nie w katalogu, z którego uruchomiono dotnet test (bez TestResults/ w katalogu głównym). -->
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --results-directory "$(MSBuildProjectDirectory)/bin/TestResults"</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+
+  <!-- Reguły APP001–APP006 (ADR-0015, ADR-0023, ADR-0024, ADR-0027, ADR-0032, ADR-0033) dla wszystkich projektów poza samymi analizatorami. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'SuperApp.Analyzers' AND '$(MSBuildProjectName)' != 'SuperApp.Analyzers.Tests'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)src/Tools/SuperApp.Analyzers/SuperApp.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+</Project>

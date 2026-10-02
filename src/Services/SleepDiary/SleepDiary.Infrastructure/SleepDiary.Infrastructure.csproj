@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Framework\SuperApp.Framework.Infrastructure\SuperApp.Framework.Infrastructure.csproj" />
+    <ProjectReference Include="..\SleepDiary.Application\SleepDiary.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SleepDiary.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

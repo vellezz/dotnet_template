@@ -1,0 +1,60 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Analytics/">
+    <Project Path="src/Analytics/SuperApp.AnalyticsForwarder.Tests/SuperApp.AnalyticsForwarder.Tests.csproj" />
+    <Project Path="src/Analytics/SuperApp.AnalyticsForwarder/SuperApp.AnalyticsForwarder.csproj" />
+  </Folder>
+  <Folder Name="/src/Bff/">
+    <Project Path="src/Bff/Example.Bff.Tests/Example.Bff.Tests.csproj" />
+    <Project Path="src/Bff/Example.Bff/Example.Bff.csproj" />
+  </Folder>
+  <Folder Name="/src/Framework/">
+    <Project Path="src/Framework/SuperApp.Framework.Application/SuperApp.Framework.Application.csproj" />
+    <Project Path="src/Framework/SuperApp.Framework.Domain/SuperApp.Framework.Domain.csproj" />
+    <Project Path="src/Framework/SuperApp.Framework.Infrastructure/SuperApp.Framework.Infrastructure.csproj" />
+    <Project Path="src/Framework/SuperApp.Framework.Testing/SuperApp.Framework.Testing.csproj" />
+  </Folder>
+  <Folder Name="/src/Gateway/">
+    <Project Path="src/Gateway/SuperApp.Gateway.Tests/SuperApp.Gateway.Tests.csproj" />
+    <Project Path="src/Gateway/SuperApp.Gateway/SuperApp.Gateway.csproj" />
+  </Folder>
+  <Folder Name="/src/Migrator/">
+    <Project Path="src/Migrator/SuperApp.Migrator/SuperApp.Migrator.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Knowledge/">
+    <Project Path="src/Services/Knowledge/Knowledge.Api/Knowledge.Api.csproj" />
+    <Project Path="src/Services/Knowledge/Knowledge.Application/Knowledge.Application.csproj" />
+    <Project Path="src/Services/Knowledge/Knowledge.Contracts/Knowledge.Contracts.csproj" />
+    <Project Path="src/Services/Knowledge/Knowledge.Domain/Knowledge.Domain.csproj" />
+    <Project Path="src/Services/Knowledge/Knowledge.Infrastructure/Knowledge.Infrastructure.csproj" />
+    <Project Path="src/Services/Knowledge/Knowledge.Worker/Knowledge.Worker.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Knowledge/tests/">
+    <Project Path="src/Services/Knowledge/tests/Knowledge.Application.Tests/Knowledge.Application.Tests.csproj" />
+    <Project Path="src/Services/Knowledge/tests/Knowledge.Domain.Tests/Knowledge.Domain.Tests.csproj" />
+    <Project Path="src/Services/Knowledge/tests/Knowledge.IntegrationTests/Knowledge.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/SleepDiary/">
+    <Project Path="src/Services/SleepDiary/SleepDiary.Api/SleepDiary.Api.csproj" />
+    <Project Path="src/Services/SleepDiary/SleepDiary.Application/SleepDiary.Application.csproj" />
+    <Project Path="src/Services/SleepDiary/SleepDiary.Contracts/SleepDiary.Contracts.csproj" />
+    <Project Path="src/Services/SleepDiary/SleepDiary.Domain/SleepDiary.Domain.csproj" />
+    <Project Path="src/Services/SleepDiary/SleepDiary.Infrastructure/SleepDiary.Infrastructure.csproj" />
+    <Project Path="src/Services/SleepDiary/SleepDiary.Worker/SleepDiary.Worker.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/SleepDiary/tests/">
+    <Project Path="src/Services/SleepDiary/tests/SleepDiary.Application.Tests/SleepDiary.Application.Tests.csproj" />
+    <Project Path="src/Services/SleepDiary/tests/SleepDiary.Domain.Tests/SleepDiary.Domain.Tests.csproj" />
+    <Project Path="src/Services/SleepDiary/tests/SleepDiary.IntegrationTests/SleepDiary.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/src/Tools/">
+    <Project Path="src/Tools/SuperApp.Analyzers.Tests/SuperApp.Analyzers.Tests.csproj" />
+    <Project Path="src/Tools/SuperApp.Analyzers/SuperApp.Analyzers.csproj" />
+    <Project Path="src/Tools/SuperApp.Cli.Tests/SuperApp.Cli.Tests.csproj" />
+    <Project Path="src/Tools/SuperApp.Cli/SuperApp.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SuperApp.ArchitectureTests/SuperApp.ArchitectureTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Architecture rules for the whole solution (ADR-0025). A new service needs only references to its Api and Worker projects
+    below (they pull in the other layers); without them its assemblies are not in the output and the rules skip it silently.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="TngTech.ArchUnitNET.xUnitV3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Analytics\SuperApp.AnalyticsForwarder\SuperApp.AnalyticsForwarder.csproj" />
+    <ProjectReference Include="..\..\src\Bff\Example.Bff\Example.Bff.csproj" />
+    <ProjectReference Include="..\..\src\Gateway\SuperApp.Gateway\SuperApp.Gateway.csproj" />
+    <ProjectReference Include="..\..\src\Migrator\SuperApp.Migrator\SuperApp.Migrator.csproj" />
+    <ProjectReference Include="..\..\src\Services\Knowledge\Knowledge.Api\Knowledge.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Knowledge\Knowledge.Worker\Knowledge.Worker.csproj" />
+    <ProjectReference Include="..\..\src\Services\SleepDiary\SleepDiary.Api\SleepDiary.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\SleepDiary\SleepDiary.Worker\SleepDiary.Worker.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+{
+  "openApiPath": "../../../../Services/Knowledge/Knowledge.Api/openapi/Knowledge.Api.json",
+  "namespace": "Example.Bff.Clients.Knowledge",
+  "naming": { "useOpenApiTitle": false, "interfaceName": "KnowledgeApi" },
+  "outputFolder": "./Generated",
+  "outputFilename": "KnowledgeApi.cs",
+  "useCancellationTokens": true,
+  "returnIApiResponse": true,
+  "typeAccessibility": "Public",
+  "usePolymorphicSerialization": true,
+  "generateOperationHeaders": false,
+  "operationNameTemplate": "{operationName}Async",
+  "operationNameGenerator": "SingleClientFromOperationId",
+  "codeGeneratorSettings": { "dateType": "System.DateOnly", "dateTimeType": "System.DateTimeOffset", "timeType": "System.TimeOnly" }
+}

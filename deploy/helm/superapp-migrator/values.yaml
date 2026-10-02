@@ -1,0 +1,18 @@
+# Job migracji (ADR-0004): wyłącznie dev/test. Na prod enabled: false, migracje uruchamia DBA skryptem.
+enabled: true
+
+image:
+  registry: registry.example.local/app
+  repository: superapp-migrator
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Secret z connection stringiem użytkownika superapp_migrator (klucz ConnectionStrings__Migrator).
+# Musi istnieć przed Jobem PreSync (osobna sync-wave, ADR-0004).
+secretName: superapp-migrator-secrets
+
+backoffLimit: 1
+activeDeadlineSeconds: 1800
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { memory: 512Mi }

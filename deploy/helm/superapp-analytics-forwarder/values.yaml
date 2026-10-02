@@ -1,0 +1,42 @@
+# Forwarder analityki produktowej (ADR-0036): konsumuje zdarzenia integracyjne serwisów i wysyła dozwolone zdarzenia do PostHog Cloud EU.
+# Nie ma bazy, API ani migracji; skaluje się po długości swoich kolejek.
+
+# Experience, do której należy komponent (ADR-0038, ADR-0041): etykieta app.kubernetes.io/part-of, na której opierają się selektory
+# NetworkPolicy działu infrastruktury. Etykieta superapp.example/experience-role (bff | domain-service | worker) jest ustawiana w szablonach.
+# Wymagane: pusta wartość przerywa renderowanie chartu, żeby żaden pod nie trafił poza polityki sieci.
+experience: ""
+
+image:
+  registry: registry.example.local/app
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Secret tworzony przez External Secrets (dział infrastruktury, ADR-0016). Wymagane klucze:
+#   ConnectionStrings__RabbitMq, Analytics__ProjectToken, Analytics__IdKey
+# Analytics__IdKey musi być ten sam co w bramach i serwisach środowiska (pseudonim użytkownika, ADR-0036).
+# Bez Analytics__ProjectToken forwarder tylko loguje nazwy zdarzeń (analityka wyłączona).
+secretName: analytics-forwarder-secrets
+
+otel:
+  endpoint: http://otel-collector.observability.svc.cluster.local:4317
+
+replicas: 1
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 256Mi }
+
+keda:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  queueLength: "200"
+  # Kolejki forwardera (konwencja MassTransit: analytics-<konsument>).
+  queues:
+    - analytics-material-published
+    - analytics-material-archived
+    - analytics-collection-archived
+    - analytics-sleep-entry-recorded
+  triggerAuthentication: rabbitmq-trigger-auth
+
+# Czas na wysłanie zdarzeń z kolejki klienta PostHog przy zatrzymaniu poda.
+terminationGracePeriodSeconds: 30

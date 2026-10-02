@@ -1,0 +1,16 @@
+# Kontekst budowania obrazów to katalog główny repozytorium; bez artefaktów builda, wyników testów i plików lokalnych.
+**/bin/
+**/obj/
+**/TestResults/
+**/node_modules/
+.git/
+.vs/
+.idea/
+*.user
+deploy/local/.env
+deploy/local/certs/
+docs/
+mobile/
+web/
+tools/packages/*.nupkg
+artifacts/
