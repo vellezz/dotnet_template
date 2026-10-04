@@ -43,11 +43,14 @@ public static class PersistenceServiceCollectionExtensions
         services.AddDbContext<TWrite>((provider, options) => options
             .UseSqlServer(
                 configuration.GetConnectionString("Write"),
-                sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", schema))
+                sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", schema)
+                    .ExecutionStrategy(dependencies => new AppSqlExecutionStrategy(dependencies)))
             .AddInterceptors(provider.GetRequiredService<AfterCommitInterceptor>()));
 
         services.AddDbContext<TRead>(options => options
-            .UseSqlServer(configuration.GetConnectionString("Read"))
+            .UseSqlServer(
+                configuration.GetConnectionString("Read"),
+                sql => sql.EnableRetryOnFailure())
             .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<TWrite>());

@@ -23,5 +23,8 @@ public static class GatewayDbContextOptions
     /// Connection string of the database; <see langword="null"/> does not fail here, a missing connection only surfaces on the first use of the context.
     /// </param>
     public static void Configure(DbContextOptionsBuilder options, string? connectionString) =>
-        options.UseSqlServer(connectionString, sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", GatewayDbContext.SchemaName));
+        options.UseSqlServer(
+            connectionString,
+            sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", GatewayDbContext.SchemaName)
+                .ExecutionStrategy(dependencies => new SuperApp.Framework.Infrastructure.Persistence.AppSqlExecutionStrategy(dependencies)));
 }
