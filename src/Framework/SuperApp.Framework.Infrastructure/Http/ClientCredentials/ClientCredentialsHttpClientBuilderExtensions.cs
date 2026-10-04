@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace SuperApp.Framework.Infrastructure.Http.ClientCredentials;
 
@@ -46,7 +47,7 @@ public static class ClientCredentialsHttpClientBuilderExtensions
     public static IHttpClientBuilder AddClientCredentialsToken(this IHttpClientBuilder builder, string clientName)
     {
         builder.Services.AddHttpClient(ClientCredentialsTokenProvider.TokenHttpClientName);
-        builder.Services.AddSingleton<ClientCredentialsTokenProvider>();
+        builder.Services.TryAddSingleton<ClientCredentialsTokenProvider>();
         builder.Services.AddOptions<ClientCredentialsOptions>(clientName)
             .BindConfiguration($"ClientCredentials:{clientName}")
             .Validate(
