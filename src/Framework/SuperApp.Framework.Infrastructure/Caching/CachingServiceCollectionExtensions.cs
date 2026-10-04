@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using StackExchange.Redis;
 
 namespace SuperApp.Framework.Infrastructure.Caching;
 
@@ -34,9 +36,12 @@ public static class CachingServiceCollectionExtensions
         var redis = configuration.GetConnectionString("Redis");
         if (!string.IsNullOrWhiteSpace(redis))
         {
+            var redisOptions = ConfigurationOptions.Parse(redis);
+            redisOptions.AbortOnConnectFail = false;
+            services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
             services.AddStackExchangeRedisCache(options =>
             {
-                options.Configuration = redis;
+                options.ConfigurationOptions = redisOptions;
                 options.InstanceName = $"{instancePrefix}:";
             });
         }

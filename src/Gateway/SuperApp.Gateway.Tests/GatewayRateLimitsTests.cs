@@ -34,4 +34,21 @@ public sealed class GatewayRateLimitsTests
         Assert.Equal("http.too_many_requests", body.RootElement.GetProperty("code").GetString());
         Assert.True(body.RootElement.TryGetProperty("traceId", out _));
     }
+
+    [Fact]
+    public async Task Redis_rate_limiter_falls_back_to_memory_and_enforces_limit()
+    {
+        await using var limiter = new RedisFixedWindowRateLimiter(null, "gateway:rl:per-user", "user-1", permitLimit: 2, TimeSpan.FromMinutes(1));
+
+        using var lease1 = await limiter.AcquireAsync(1, TestContext.Current.CancellationToken);
+        Assert.True(lease1.IsAcquired);
+
+        using var lease2 = await limiter.AcquireAsync(1, TestContext.Current.CancellationToken);
+        Assert.True(lease2.IsAcquired);
+
+        using var lease3 = await limiter.AcquireAsync(1, TestContext.Current.CancellationToken);
+        Assert.False(lease3.IsAcquired);
+        Assert.True(lease3.TryGetMetadata(System.Threading.RateLimiting.MetadataName.RetryAfter.Name, out var retryAfter));
+        Assert.NotNull(retryAfter);
+    }
 }
