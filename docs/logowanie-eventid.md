@@ -16,4 +16,4 @@ nowy komunikat dostaje kolejny wolny numer z zakresu komponentu, nowy serwis lub
 | 5000–5999 | SleepDiary | — |
 | 6000–6999 | `Example.Bff` (BFF experience Example): 6001 część odpowiedzi komponowanej inna niż `Ok` (`ExperienceSummaryController`) | 6001 |
 | 7000–8999 | kolejne serwisy i BFF-y (po 1000 na komponent) | — |
-| 9000–9999 | `SuperApp.AnalyticsForwarder` (ADR-0036) | 9001–9002 |
+| 9000–9999 | `SuperApp.AnalyticsForwarder` (ADR-0036) | 9001–9004 |

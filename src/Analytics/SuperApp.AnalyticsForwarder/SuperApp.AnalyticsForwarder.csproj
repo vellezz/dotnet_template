@@ -11,4 +11,8 @@
     <PackageReference Include="PostHog" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="SuperApp.AnalyticsForwarder.Tests" />
+  </ItemGroup>
+
 </Project>
