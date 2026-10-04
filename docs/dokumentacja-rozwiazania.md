@@ -485,8 +485,8 @@ dostał ruchu na starym schemacie. Proces nigdy nie stosuje migracji, tylko je s
 #### 4.3.3 Persystencja
 
 `AddAppPersistence<TWrite, TRead>(configuration, schema)`: `WriteDbContext` z `ConnectionStrings:Write`, historią migracji
-w `{schema}.__EFMigrationsHistory` i `AfterCommitInterceptor`; `ReadDbContext` z `ConnectionStrings:Read` i `NoTracking`;
-`IUnitOfWork` = kontekst zapisu; `IDomainEventDispatcher`. `EnableRetryOnFailure` nie jest konfigurowane.
+w `{schema}.__EFMigrationsHistory`, strategią ponawiania `AppSqlExecutionStrategy` i `AfterCommitInterceptor`; `ReadDbContext` z `ConnectionStrings:Read`,
+`EnableRetryOnFailure` i `NoTracking`; `IUnitOfWork` = kontekst zapisu; `IDomainEventDispatcher`.
 
 | Typ | Opis |
 |---|---|
@@ -1636,11 +1636,11 @@ narzędzie, a `doctor` wykrywa braki. ADR-0025, ADR-0046.
 | D4 | Kontrakt z shellem | ADR-0045 proponowany, czeka na odpowiedzi zespołu shella | Klienci działają samodzielnie (ADR-0031, ADR-0036) |
 | D5 | MassTransit | Kolumna `OutboxState.BusName` i indeks z MassTransit 9 zostały w obu serwisach (krok expand) | Migracja contract, gdy nie będzie instancji MassTransit 9 |
 | D6 | Knowledge | Domyślne wartości `DF_CollectionItems_Position`, `DF_ContentTextSpans_Position` (krok expand) | Migracja contract |
-| D7 | Brama | Limit żądań liczony per replika | Efektywny limit rośnie z liczbą replik; wspólna brama powinna liczyć globalnie |
+| D7 | Brama | Rozproszony rate limiting w Redis z fallbackiem do pamięci (`RedisFixedWindowRateLimiter`) | Rozwiązane; limit synchronizowany między replikami |
 | D8 | Brama | `RouteExperienceThroughBff` nie jest expand/contract | Przy wdrażaniu: najpierw BFF, potem migracja bramy |
 | D9 | Forwarder | Brak inboxa: ponownie dostarczona wiadomość wysyła zdarzenie drugi raz | Deduplikacja po `message_id` w analizie |
 | D10 | SleepDiary | Cache zarejestrowany, nieużywany; brak własnych logów | Do wykorzystania przy potrzebie |
-| D11 | Persystencja | `EnableRetryOnFailure` nie jest skonfigurowane | Błędy przejściowe SQL kończą żądanie; konsumenci mają retry MassTransit |
+| D11 | Persystencja | Strategia ponawiania na błędy przejściowe SQL (`AppSqlExecutionStrategy` i `EnableRetryOnFailure`) | Rozwiązane; bezpieczne z transakcjami użytkownika |
 | D12 | Feature flags | Mechanizm gotowy, żaden serwis nie deklaruje flag | Pierwsza flaga: `dotnet superapp add flag` |
 | D13 | Wywołania systemowe | `AddClientCredentialsToken` gotowe, nieużywane | Pierwsze użycie wymaga klienta `{serwis}-client` w CIAM (ADR-0042) |
 | D14 | Testy architektury | Serwis bez referencji w projekcie testów jest pomijany po cichu | Pilnuje tego `doctor` (`service-registration`) |
