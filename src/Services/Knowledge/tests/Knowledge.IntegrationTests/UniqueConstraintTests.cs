@@ -15,6 +15,7 @@ namespace Knowledge.IntegrationTests;
 /// A race that slips past a handler's uniqueness check is reported by the unit of work as an error of the Knowledge context,
 /// not as an exception. Two conflicting entities added in one scope reproduce the race deterministically.
 /// </summary>
+[Trait("Category", "Integration")]
 [Collection(PipelineCollection.Name)]
 public sealed class UniqueConstraintTests(ServiceFixture fixture)
 {

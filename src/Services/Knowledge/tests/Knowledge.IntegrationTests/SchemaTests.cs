@@ -5,6 +5,7 @@ using Knowledge.Infrastructure.Persistence.Write;
 
 namespace Knowledge.IntegrationTests;
 
+[Trait("Category", "Integration")]
 public sealed class SchemaTests(ServiceFixture fixture)
 {
     /// <summary>Migrations create tables only in the service schema, together with the outbox and the migrations history (ADR-0004, ADR-0021).</summary>

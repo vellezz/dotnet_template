@@ -13,6 +13,7 @@ namespace SleepDiary.IntegrationTests;
 /// <c>UserId</c> + <c>Date</c> rejects the second insert. The unit of work must return <see cref="SleepEntryErrors.AlreadyExists"/>
 /// (HTTP 409), not throw (HTTP 500).
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class UniqueEntryPerDayTests(ServiceFixture fixture)
 {
     private static readonly DateOnly Day = new(2026, 9, 10);

@@ -15,6 +15,7 @@ using SuperApp.Framework.Testing;
 namespace SleepDiary.IntegrationTests;
 
 /// <summary>End-to-end flows on MSSQL (Testcontainers); the tests of this class run sequentially.</summary>
+[Trait("Category", "Integration")]
 public sealed class SleepDiaryFlowTests(ServiceFixture fixture)
 {
     private static readonly DateOnly Monday = new(2026, 9, 21);

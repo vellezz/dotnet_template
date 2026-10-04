@@ -29,6 +29,7 @@ using SuperApp.Framework.Testing;
 namespace Knowledge.IntegrationTests;
 
 /// <summary>End-to-end flows through the MediatR pipeline on MSSQL (Testcontainers); tests in this class run sequentially.</summary>
+[Trait("Category", "Integration")]
 [Collection(PipelineCollection.Name)]
 public sealed class KnowledgeFlowTests(ServiceFixture fixture)
 {

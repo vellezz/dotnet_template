@@ -14,6 +14,7 @@ namespace Knowledge.IntegrationTests;
 /// a 409 <c>persistence.concurrency_conflict</c> result; inside a consumer's transaction it must stay an exception so the message is retried.
 /// A failed command inside a consumer's transaction must leave nothing for the consumer's own save to write.
 /// </summary>
+[Trait("Category", "Integration")]
 [Collection(PipelineCollection.Name)]
 public sealed class ConcurrencyConflictTests(ServiceFixture fixture)
 {

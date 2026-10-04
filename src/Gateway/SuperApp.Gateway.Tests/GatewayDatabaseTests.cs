@@ -32,6 +32,7 @@ namespace SuperApp.Gateway.Tests;
 /// The gateway schema on a real MSSQL (Testcontainers): migration, route configuration from the database (ADR-0022), BFF sessions and the
 /// cross-replica token refresh (ADR-0011, ADR-0013).
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class GatewayDatabaseTests : IAsyncLifetime
 {
     private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();

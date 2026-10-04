@@ -13,6 +13,7 @@ namespace ServiceName.IntegrationTests;
 /// resolve repositories from <see cref="ServiceFixture.Services"/> in a new scope, against the real MSSQL schema.
 /// </remarks>
 /// <param name="fixture">The assembly-wide fixture with the migrated database and the DI container.</param>
+[Trait("Category", "Integration")]
 public sealed class SchemaTests(ServiceFixture fixture)
 {
     /// <summary>

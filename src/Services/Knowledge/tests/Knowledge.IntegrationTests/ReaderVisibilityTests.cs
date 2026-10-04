@@ -17,6 +17,7 @@ using SuperApp.Framework.Testing;
 namespace Knowledge.IntegrationTests;
 
 /// <summary>Readers (without <c>knowledge.catalog.write</c>) never see or count draft and archived materials.</summary>
+[Trait("Category", "Integration")]
 [Collection(PipelineCollection.Name)]
 public sealed class ReaderVisibilityTests(ServiceFixture fixture)
 {

@@ -13,6 +13,7 @@ using SuperApp.Framework.Testing;
 namespace Knowledge.IntegrationTests;
 
 /// <summary>The existence checks of the repositories ignore duplicate identifiers instead of failing on them.</summary>
+[Trait("Category", "Integration")]
 [Collection(PipelineCollection.Name)]
 public sealed class ExistenceCheckTests(ServiceFixture fixture)
 {

@@ -14,6 +14,7 @@ using SuperApp.Framework.Testing;
 namespace Knowledge.IntegrationTests;
 
 /// <summary>Cache entries are invalidated after the commit of a change, never before it and never after a rollback (ADR-0020).</summary>
+[Trait("Category", "Integration")]
 [Collection(PipelineCollection.Name)]
 public sealed class CacheInvalidationTests(ServiceFixture fixture)
 {
