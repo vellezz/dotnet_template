@@ -5,7 +5,7 @@
 | **Wersja** | 1.0 |
 | **Data** | 2026-10-02 |
 | **Status** | Projekt, do przeglądu |
-| **Właściciel** | [do uzupełnienia] |
+| **Właściciel** | Zespół Architektury SuperApp |
 | **Zakres** | Całe repozytorium: projekty solucji, interfejsy, konfiguracja, wdrożenie, narzędzia |
 | **Powiązane** | [Dokument architektury](architektura.md) (arc42), [ADR](adr/README.md), [Przewodnik programisty](przewodnik/README.md) |
 
@@ -739,8 +739,8 @@ wykryć szkiców.
   Inwalidacja: `CategoryCacheInvalidation` i `MaterialCacheInvalidation` przez `OnCommitted`. Kolekcje nie są cache'owane.
 - **`RemoveAllForItemAsync`** usuwa ulubione wielu użytkowników jednym `ExecuteDeleteAsync` w transakcji komendy: świadomy wyjątek
   od zasady „jedna transakcja, jeden agregat” (ADR-0028). Lista ulubionych ukrywa zarchiwizowane elementy, zanim Worker je usunie.
-- **Migracje:** `Initial`, `FixOwnedPositionKeys` (IDENTITY → zwykłe kolumny z przenumerowaniem; domyślne wartości 0 jako krok
-  expand), `MassTransit8OutboxModel` (krok expand: indeksy outboxa; kolumna `BusName` z MassTransit 9 zostaje do migracji contract).
+- **Migracje:** `Initial`, `FixOwnedPositionKeys` (IDENTITY → zwykłe kolumny z przenumerowaniem),
+  `MassTransit8OutboxModel` (krok expand: indeksy outboxa; kolumna `BusName` z MassTransit 9 zostaje do migracji contract).
 - **ACL:** brak klientów innych systemów.
 
 #### Worker i zdarzenia
@@ -1635,7 +1635,7 @@ narzędzie, a `doctor` wykrywa braki. ADR-0025, ADR-0046.
 | D3 | NetworkPolicy | Charty mają tylko etykiety; procedura z działem infrastruktury nieustalona | Izolacja experience to wymaganie, nie kod (ADR-0041) |
 | D4 | Kontrakt z shellem | ADR-0045 proponowany, czeka na odpowiedzi zespołu shella | Klienci działają samodzielnie (ADR-0031, ADR-0036) |
 | D5 | MassTransit | Kolumna `OutboxState.BusName` i indeks z MassTransit 9 zostały w obu serwisach (krok expand) | Migracja contract, gdy nie będzie instancji MassTransit 9 |
-| D6 | Knowledge | Domyślne wartości `DF_CollectionItems_Position`, `DF_ContentTextSpans_Position` (krok expand) | Migracja contract |
+| D6 | Knowledge | Usunięcie tymczasowych wartości domyślnych (`DF_*_Position`) | Rozwiązane; wyeliminowano zbędne ograniczenia `DEFAULT 0` bezpośrednio w migracji `FixOwnedPositionKeys` |
 | D7 | Brama | Rozproszony rate limiting w Redis z fallbackiem do pamięci (`RedisFixedWindowRateLimiter`) | Rozwiązane; limit synchronizowany między replikami |
 | D8 | Brama | `RouteExperienceThroughBff` nie jest expand/contract | Przy wdrażaniu: najpierw BFF, potem migracja bramy |
 | D9 | Forwarder | Lekka deduplikacja w Redis z fallbackiem do pamięci (`DeduplicatingProductEventSink`) | Rozwiązane; ponowne dostarczenie wiadomości z brokera nie duplikuje zdarzenia w PostHog |
