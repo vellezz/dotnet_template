@@ -17,11 +17,6 @@ namespace Knowledge.Infrastructure.Migrations
     /// their current order, the old column is dropped, the new one renamed and the constraints are recreated. No row is lost.
     /// </para>
     /// <para>
-    /// Expand/contract: the rebuilt columns get a default of 0 (<c>DF_CollectionItems_Position</c>, <c>DF_ContentTextSpans_Position</c>),
-    /// so replicas of the previous version, which omit the position on insert, still work during a rolling update for the only case they
-    /// could ever save (the first item or span). A later contract migration may drop these defaults.
-    /// </para>
-    /// <para>
     /// <see cref="Down"/> restores the <c>IDENTITY</c> columns; positions are then renumbered by the database, as with the initial schema.
     /// </para>
     /// </remarks>
@@ -80,7 +75,6 @@ namespace Knowledge.Infrastructure.Migrations
                 oldClrType: typeof(int),
                 oldType: "int",
                 oldNullable: true);
-            migrationBuilder.Sql($"ALTER TABLE [knowledge].[{table}] ADD CONSTRAINT [DF_{table}_Position] DEFAULT 0 FOR [Position];");
             migrationBuilder.AddPrimaryKey(name: $"PK_{table}", schema: "knowledge", table: table, columns: [owner, "Position"]);
         }
 
@@ -88,7 +82,6 @@ namespace Knowledge.Infrastructure.Migrations
         private static void RebuildWithIdentity(MigrationBuilder migrationBuilder, string table, string owner)
         {
             migrationBuilder.DropPrimaryKey(name: $"PK_{table}", schema: "knowledge", table: table);
-            migrationBuilder.Sql($"ALTER TABLE [knowledge].[{table}] DROP CONSTRAINT [DF_{table}_Position];");
             migrationBuilder.DropColumn(name: "Position", schema: "knowledge", table: table);
             migrationBuilder.AddColumn<int>(name: "Position", schema: "knowledge", table: table, type: "int", nullable: false)
                 .Annotation("SqlServer:Identity", "1, 1");
