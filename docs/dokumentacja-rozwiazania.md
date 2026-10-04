@@ -1638,13 +1638,13 @@ narzędzie, a `doctor` wykrywa braki. ADR-0025, ADR-0046.
 | D6 | Knowledge | Domyślne wartości `DF_CollectionItems_Position`, `DF_ContentTextSpans_Position` (krok expand) | Migracja contract |
 | D7 | Brama | Rozproszony rate limiting w Redis z fallbackiem do pamięci (`RedisFixedWindowRateLimiter`) | Rozwiązane; limit synchronizowany między replikami |
 | D8 | Brama | `RouteExperienceThroughBff` nie jest expand/contract | Przy wdrażaniu: najpierw BFF, potem migracja bramy |
-| D9 | Forwarder | Brak inboxa: ponownie dostarczona wiadomość wysyła zdarzenie drugi raz | Deduplikacja po `message_id` w analizie |
+| D9 | Forwarder | Lekka deduplikacja w Redis z fallbackiem do pamięci (`DeduplicatingProductEventSink`) | Rozwiązane; ponowne dostarczenie wiadomości z brokera nie duplikuje zdarzenia w PostHog |
 | D10 | SleepDiary | Cache zarejestrowany, nieużywany; brak własnych logów | Do wykorzystania przy potrzebie |
 | D11 | Persystencja | Strategia ponawiania na błędy przejściowe SQL (`AppSqlExecutionStrategy` i `EnableRetryOnFailure`) | Rozwiązane; bezpieczne z transakcjami użytkownika |
 | D12 | Feature flags | Mechanizm gotowy, żaden serwis nie deklaruje flag | Pierwsza flaga: `dotnet superapp add flag` |
 | D13 | Wywołania systemowe | `AddClientCredentialsToken` gotowe, nieużywane | Pierwsze użycie wymaga klienta `{serwis}-client` w CIAM (ADR-0042) |
 | D14 | Testy architektury | Serwis bez referencji w projekcie testów jest pomijany po cichu | Pilnuje tego `doctor` (`service-registration`) |
-| D15 | `AddClientCredentialsToken` | Provider rejestrowany `AddSingleton` przy każdym kliencie | Nieszkodliwe; przy wielu klientach zamienić na `TryAdd` |
+| D15 | `AddClientCredentialsToken` | Provider rejestrowany przez `TryAddSingleton` w kontenerze DI | Rozwiązane; bezpieczna wielokrotna rejestracja |
 | D16 | ADR-0025 | Jeden projekt testów architektury, decyzja „do ponownej oceny” | Ocenić przy kolejnych experience |
 
 ---
