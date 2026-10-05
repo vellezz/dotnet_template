@@ -35,3 +35,24 @@ lifecycle:
     sleep:
       seconds: 5
 {{- end }}
+
+{{/* Global image and configuration fallbacks for Umbrella Chart support */}}
+{{- define "superapp.imageRegistry" -}}
+{{- if and .Values.global .Values.global.imageRegistry -}}
+{{- .Values.global.imageRegistry -}}
+{{- else if and .Values.global .Values.global.image .Values.global.image.registry -}}
+{{- .Values.global.image.registry -}}
+{{- else -}}
+{{- .Values.image.registry -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "superapp.imageTag" -}}
+{{- if and .Values.global .Values.global.imageTag -}}
+{{- .Values.global.imageTag -}}
+{{- else if and .Values.global .Values.global.image .Values.global.image.tag -}}
+{{- .Values.global.image.tag -}}
+{{- else -}}
+{{- .Values.image.tag -}}
+{{- end -}}
+{{- end -}}

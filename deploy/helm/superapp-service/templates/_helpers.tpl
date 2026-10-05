@@ -1,5 +1,5 @@
 {{- define "superapp.labels" -}}
-app.kubernetes.io/part-of: {{ required "experience jest wymagane (ADR-0041): nazwa experience, do której należy komponent" .Values.experience }}
+app.kubernetes.io/part-of: {{ .Values.experience | default "superapp" }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end }}
@@ -35,3 +35,44 @@ lifecycle:
     sleep:
       seconds: 5
 {{- end }}
+
+{{/* Global image and configuration fallbacks for Umbrella Chart support */}}
+{{- define "superapp.imageRegistry" -}}
+{{- if and .Values.global .Values.global.imageRegistry -}}
+{{- .Values.global.imageRegistry -}}
+{{- else if and .Values.global .Values.global.image .Values.global.image.registry -}}
+{{- .Values.global.image.registry -}}
+{{- else -}}
+{{- .Values.image.registry -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "superapp.imageTag" -}}
+{{- if and .Values.global .Values.global.imageTag -}}
+{{- .Values.global.imageTag -}}
+{{- else if and .Values.global .Values.global.image .Values.global.image.tag -}}
+{{- .Values.global.image.tag -}}
+{{- else -}}
+{{- .Values.image.tag -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "superapp.authority" -}}
+{{- if and .Values.global .Values.global.authenticationAuthority -}}
+{{- .Values.global.authenticationAuthority -}}
+{{- else if and .Values.global .Values.global.authentication .Values.global.authentication.authority -}}
+{{- .Values.global.authentication.authority -}}
+{{- else -}}
+{{- .Values.authentication.authority -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "superapp.otelEndpoint" -}}
+{{- if and .Values.global .Values.global.otelEndpoint -}}
+{{- .Values.global.otelEndpoint -}}
+{{- else if and .Values.global .Values.global.otel .Values.global.otel.endpoint -}}
+{{- .Values.global.otel.endpoint -}}
+{{- else -}}
+{{- .Values.otel.endpoint -}}
+{{- end -}}
+{{- end -}}

@@ -24,18 +24,18 @@ spec:
         {{- include "app.podSecurityContext" . | nindent 8 }}
       containers:
         - name: api
-          image: "{{ .Values.image.registry }}/{{ $name }}:{{ .Values.image.tag }}"
+          image: "{{ include "superapp.imageRegistry" . }}/{{ $name }}:{{ include "superapp.imageTag" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 8080
           env:
             - name: Authentication__Authority
-              value: {{ .Values.authentication.authority | quote }}
+              value: {{ include "superapp.authority" . | quote }}
             - name: Authentication__Audience
               value: {{ $name | quote }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: {{ .Values.otel.endpoint | quote }}
+              value: {{ include "superapp.otelEndpoint" . | quote }}
           envFrom:
             - secretRef:
                 name: {{ required "secretName jest wymagane" .Values.secretName }}

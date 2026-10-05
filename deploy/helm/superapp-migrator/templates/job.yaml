@@ -24,7 +24,7 @@ spec:
         {{- include "app.podSecurityContext" . | nindent 8 }}
       containers:
         - name: migrator
-          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ include "superapp.imageRegistry" . }}/{{ .Values.image.repository }}:{{ include "superapp.imageTag" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
             - secretRef:

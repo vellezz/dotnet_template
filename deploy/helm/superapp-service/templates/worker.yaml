@@ -24,14 +24,14 @@ spec:
         {{- include "app.podSecurityContext" . | nindent 8 }}
       containers:
         - name: worker
-          image: "{{ .Values.image.registry }}/{{ $name }}:{{ .Values.image.tag }}"
+          image: "{{ include "superapp.imageRegistry" . }}/{{ $name }}:{{ include "superapp.imageTag" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 8080
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: {{ .Values.otel.endpoint | quote }}
+              value: {{ include "superapp.otelEndpoint" . | quote }}
           envFrom:
             - secretRef:
                 name: {{ required "secretName jest wymagane" .Values.secretName }}

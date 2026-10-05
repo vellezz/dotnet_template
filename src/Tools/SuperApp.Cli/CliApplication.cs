@@ -34,6 +34,7 @@ internal static class CliApplication
             RemoveCommand.Create(common),
             MigrationCommand.Create(common),
             ContractsCommand.Create(common),
+            HelmCommand.Create(common),
             EnvCommand.Create(common),
             E2eCommand.Create(common),
         };

@@ -18,5 +18,9 @@ tools/packages/*.nupkg
 # Artefakty narzędzia superapp (np. skrypt migracji dla DBA)
 artifacts/
 
+# Helm dependencies
+deploy/helm/**/charts/
+deploy/helm/**/Chart.lock
+
 # Instrukcje asystenta: tylko lokalnie
 CLAUDE.md

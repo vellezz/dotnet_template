@@ -63,6 +63,31 @@ internal sealed class ScaffoldContext(RepositoryFiles files, ProcessRunner runne
         return new StepResult(StepStatus.Created, path, detail);
     }
 
+    /// <summary>Writes or overwrites a file with the given content.</summary>
+    /// <param name="path">File relative to the repository root.</param>
+    /// <param name="content">Content to write.</param>
+    /// <param name="detail">What the file is, for the report.</param>
+    /// <returns><see cref="StepStatus.Created"/>, <see cref="StepStatus.Changed"/> or <see cref="StepStatus.Unchanged"/>.</returns>
+    public StepResult Write(string path, string content, string detail)
+    {
+        var full = Files.FullPath(path);
+        if (File.Exists(full))
+        {
+            var existing = File.ReadAllText(full, new UTF8Encoding(false));
+            if (existing == content)
+            {
+                return new StepResult(StepStatus.Unchanged, path, detail);
+            }
+
+            File.WriteAllText(full, content, new UTF8Encoding(false));
+            return new StepResult(StepStatus.Changed, path, detail);
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, content, new UTF8Encoding(false));
+        return new StepResult(StepStatus.Created, path, detail);
+    }
+
     /// <summary>Deletes a file or a directory with everything in it, if it exists.</summary>
     /// <param name="path">File or directory relative to the repository root.</param>
     /// <param name="detail">What it is, for the report.</param>

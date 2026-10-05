@@ -14,7 +14,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>superapp</ToolCommandName>
     <PackageId>SuperApp.Cli</PackageId>
-    <Version>0.6.3</Version>
+    <Version>0.7.0</Version>
     <Description>Developer tool of the SuperApp repository: consistency checks, an overview, and adding or removing services, BFFs and service clients.</Description>
     <PackageOutputPath>$(MSBuildThisFileDirectory)../../../tools/packages</PackageOutputPath>
     <IsPackable>true</IsPackable>
