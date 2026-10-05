@@ -1207,6 +1207,26 @@ zawierają NetworkPolicy: tworzy je dział infrastruktury na podstawie etykiet.
 
 Nazwy kolejek KEDA muszą odpowiadać konwencji MassTransit (`{serwis}-{zdarzenie}`); chart tego nie sprawdza.
 
+#### Chart nadrzędny (Umbrella Chart) i wartości dla ArgoCD
+
+Do wdrożenia systemu w klastrze za pośrednictwem ArgoCD wykorzystywany jest wzorzec Umbrella Chart. Pliki wynikowe generowania chartów nadrzędnych oraz wartości środowiskowych **nie trafiają do repozytorium aplikacji** — leżą w dedykowanych repozytoriach konfiguracyjnych (np. repozytorium wartości ArgoCD / repozytorium chartów) bądź są generowane w pipeline CI/CD jako artefakty.
+
+Chart nadrzędny agreguje bazowe charty repozytorium (`deploy/helm/*`) jako zależności:
+- instancje `superapp-service` dla każdego serwisu domenowego (aliasy wg nazwy serwisu, np. `knowledge`, `sleepdiary`),
+- instancje `superapp-bff` dla każdego BFF-a experience (aliasy wg formatu `{experience}-bff`),
+- `superapp-analytics-forwarder` (alias `analytics-forwarder`),
+- `superapp-migrator` (alias `migrator`).
+
+Wzorzec ten gwarantuje pojedynczy, niezmienny zestaw szablonów bazowych dla wszystkich środowisk – parametryzacji podlegają wyłącznie dedykowane pliki wartości dla ArgoCD:
+- `values.yaml` – domyślne parametry bazowe i tożsamości komponentów,
+- `values-dev.yaml` – środowisko deweloperskie (np. włączony hook PreSync migratora, repliki = 1, wyłączone HPA),
+- `values-test.yaml` – środowisko testowe (konfiguracja testowa CIAM i kolejek, migrator włączony),
+- `values-prod.yaml` – środowisko produkcyjne (wyłączony migrator – migracje realizowane przez DBA zgodnie z ADR-0004, repliki $\ge$ 2, włączone HPA i PDB, produkcyjny CIAM).
+
+Do generowania tych artefaktów służą polecenia CLI:
+- `dotnet superapp helm generate [--output <katalog>]` – generuje `Chart.yaml` i `values.yaml` wraz z wartościami środowiskowymi (domyślnie w ignorowanym `artifacts/helm/superapp` lub wskazanym katalogu docelowym),
+- `dotnet superapp helm values --env <dev|test|prod> [--output <plik>]` – generuje plik wartości dla wybranego środowiska bezpośrednio do wskazanego repozytorium ArgoCD.
+
 ### 12.3 Baza danych (`deploy/sql`)
 
 - `01-bootstrap.sql` (idempotentny, ADR-0021): lista `@Services` (`gateway`, `knowledge`, `sleepdiary`); dla każdej pozycji schemat,

@@ -212,14 +212,25 @@ którym `/bff/user` zwraca `401`. Scenariusz nie zostawia sesji ani danych.
 Adresy pochodzą z portów opublikowanych w `docker-compose.yml`, więc nowy serwis albo BFF dodany przez `add` jest od razu sondowany i
 testowany. Certyfikat deweloperski bram jest akceptowany tylko dla `localhost`.
 
-## 22.8 Narzędzie i Copilot
+## 22.8 Helm i wdrożenia (ArgoCD): `helm generate`, `helm values`
+
+Wdrożenia platformy oparte są na wzorcu **Umbrella Chart**, który agreguje bazowe charty mikroserwisów z `deploy/helm/` (`superapp-service`, `superapp-bff`, `superapp-migrator`, `superapp-analytics-forwarder`). Pliki wynikowe generowania chartów oraz wartości per środowisko **nigdy nie trafiają do repozytorium aplikacji** — leżą w dedykowanych repozytoriach wartości dla ArgoCD lub są tworzone w pipeline CI/CD jako artefakty.
+
+Polecenia `add service` i `add bff` celowo nie modyfikują chartów ani wartości automatycznie. Do wygenerowania artefaktów służą dedykowane komendy:
+
+| Polecenie | Co robi |
+|---|---|
+| `helm generate [--output katalog] [--dry-run]` | analizuje zarejestrowane serwisy i BFF-y, generuje `Chart.yaml` z zależnościami oraz domyślny plik `values.yaml` i wartości środowiskowe (domyślnie w ignorowanym katalogu `artifacts/helm/superapp`) |
+| `helm values --env <dev\|test\|prod> [--output plik] [--dry-run]` | generuje plik wartości dopasowany do danego środowiska (np. `values-prod.yaml` z wyłączonym migratorem PreSync, `replicaCount: 2`, włączonym HPA i produkcyjnym CIAM), gotowy do zapisu w repozytorium ArgoCD (`--output`) |
+
+## 22.9 Narzędzie i Copilot
 
 Instrukcje Copilota (`.github/copilot-instructions.md`) każą kończyć każdą zmianę poleceniem `dotnet superapp doctor` i poprawiać
 zgłoszone błędy przed oddaniem pracy. Narzędzie jest do tego zaprojektowane: nie zadaje pytań, `--json` daje wynik do odczytu
 maszynowego, a każde znalezisko zawiera naprawę. Agent kodujący Copilota na GitHubie instaluje narzędzie krokiem z
 `.github/workflows/copilot-setup-steps.yml` (`tools/bootstrap.sh`).
 
-## 22.9 Rozwijanie narzędzia
+## 22.10 Rozwijanie narzędzia
 
 - **Nowa reguła `doctor`:** klasa implementująca `IDoctorRule` w `src/Tools/SuperApp.Cli/Doctor/Rules`, dopisana do `DoctorRules.All`,
   z testem na małym repozytorium tymczasowym (`TestRepository` w `SuperApp.Cli.Tests`). Reguła tylko czyta; jeśli jej znaleziska da
