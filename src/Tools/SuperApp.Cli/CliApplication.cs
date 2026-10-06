@@ -39,6 +39,7 @@ internal static class CliApplication
             CallCommand.Create(common),
             DbCommand.Create(common),
             OutboxCommand.Create(common),
+            InboxCommand.Create(common),
             E2eCommand.Create(common),
         };
     }

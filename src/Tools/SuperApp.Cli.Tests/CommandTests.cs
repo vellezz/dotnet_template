@@ -81,6 +81,35 @@ public sealed class CommandTests
         Assert.Equal(JsonValueKind.Array, queues.ValueKind);
     }
 
+    [Fact]
+    public async Task Inbox_status_as_json_returns_valid_structure()
+    {
+        var (exitCode, output, _) = await Run("inbox", "status", "--json");
+
+        Assert.Equal(ExitCodes.Success, exitCode);
+        using var document = JsonDocument.Parse(output);
+        Assert.True(document.RootElement.TryGetProperty("inbox", out var inbox));
+        Assert.Equal(JsonValueKind.Array, inbox.ValueKind);
+    }
+
+    [Fact]
+    public async Task Inbox_list_with_unknown_service_exits_with_not_found()
+    {
+        var (exitCode, _, error) = await Run("inbox", "list", "no-such-service");
+
+        Assert.Equal(ExitCodes.NotFound, exitCode);
+        Assert.Contains("no-such-service", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Inbox_clean_with_unknown_service_exits_with_not_found()
+    {
+        var (exitCode, _, error) = await Run("inbox", "clean", "no-such-service");
+
+        Assert.Equal(ExitCodes.NotFound, exitCode);
+        Assert.Contains("no-such-service", error, StringComparison.Ordinal);
+    }
+
     private static async Task<(int ExitCode, string Output, string Error)> Run(params string[] args)
     {
         using var output = new StringWriter();

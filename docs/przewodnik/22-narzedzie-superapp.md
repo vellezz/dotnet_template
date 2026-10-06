@@ -207,6 +207,7 @@ usunięcie) zostawia repozytorium identyczne.
 | `call <komponent> <ścieżka>` | wykonuje zapytanie HTTP do serwisu lub BFF z automatycznym pobraniem tokenu JWT, pomiarem czasu i kolorowaniem JSON |
 | `db seed\|clean\|query` | zasilanie bazy deweloperskiej danymi testowymi (`seed`), czyszczenie tabel domenowych (`clean`) lub diagnostyczne zapytania SQL (`query`) |
 | `outbox status [--watch]` | weryfikuje stan transakcyjnego outboxa/inboxa MassTransit w MSSQL oraz kolejki i błędy w RabbitMQ |
+| `inbox status\|list\|clean` | diagnostyka stanu konsumentów w `InboxState`, lista przetworzonych wiadomości (`list`) oraz czyszczenie stanu idempotencji (`clean`) na potrzeby ponownego odtworzenia zdarzeń |
 | `e2e` | scenariusz end-to-end na działającym środowisku: sondy, tokeny, dla każdego BFF trasa przez bramę z `404 http.not_found` i 32-znakowym `traceId`, `401 auth.invalid_token` bez tokenu, brak trasy do `/internal`, API wewnętrzne `200`/`403 auth.missing_scope`, zapis, odczyt i usunięcie wpisu dziennika przez bramę, pełne logowanie do `bff-web` (opis niżej); kod `2`, gdy któreś sprawdzenie nie przejdzie |
 
 Logowanie do `bff-web` w `e2e` przechodzi drogę przeglądarki bez przeglądarki: `/bff/login` → formularz logowania lokalnego realmu

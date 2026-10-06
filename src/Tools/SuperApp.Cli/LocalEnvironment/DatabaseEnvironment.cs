@@ -85,7 +85,7 @@ internal sealed class DatabaseEnvironment(string root)
             return ExitCodes.NotFound;
         }
 
-        var sb = new StringBuilder("SET NOCOUNT ON;\n");
+        var sb = new StringBuilder("SET NOCOUNT ON;\nSET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\n");
         if (cleanKnowledge)
         {
             sb.AppendLine("DELETE FROM knowledge.Favorites;");
@@ -147,6 +147,130 @@ SELECT 'sleepdiary' AS Service,
         }
 
         return rows;
+    }
+
+    /// <summary>Queries summary of transactional InboxState tables for registered services.</summary>
+    /// <param name="preferK8s">Whether to target Kubernetes or Docker Compose.</param>
+    /// <returns>Rows containing inbox counts.</returns>
+    public IReadOnlyList<(string Service, long Total, long Retried, long Locked)> InboxSummary(bool preferK8s)
+    {
+        const string query = @"
+SET NOCOUNT ON;
+SELECT 'knowledge' AS Service,
+       COUNT(*) AS Total,
+       COALESCE(SUM(CASE WHEN ReceiveCount > 1 THEN 1 ELSE 0 END), 0) AS Retried,
+       COALESCE(SUM(CASE WHEN LockId != '00000000-0000-0000-0000-000000000000' THEN 1 ELSE 0 END), 0) AS Locked
+FROM knowledge.InboxState
+UNION ALL
+SELECT 'sleepdiary' AS Service,
+       COUNT(*) AS Total,
+       COALESCE(SUM(CASE WHEN ReceiveCount > 1 THEN 1 ELSE 0 END), 0) AS Retried,
+       COALESCE(SUM(CASE WHEN LockId != '00000000-0000-0000-0000-000000000000' THEN 1 ELSE 0 END), 0) AS Locked
+FROM sleepdiary.InboxState;
+";
+        var resultText = QuerySql(query, preferK8s);
+        if (string.IsNullOrWhiteSpace(resultText))
+        {
+            return [];
+        }
+
+        var lines = resultText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var rows = new List<(string Service, long Total, long Retried, long Locked)>();
+
+        foreach (var line in lines)
+        {
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 4 &&
+                (parts[0].Equals("knowledge", StringComparison.OrdinalIgnoreCase) || parts[0].Equals("sleepdiary", StringComparison.OrdinalIgnoreCase)) &&
+                long.TryParse(parts[1], out var total) &&
+                long.TryParse(parts[2], out var retried) &&
+                long.TryParse(parts[3], out var locked))
+            {
+                rows.Add((parts[0], total, retried, locked));
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>Lists recent messages stored in the service's InboxState table.</summary>
+    /// <param name="service">Service name (e.g. knowledge, sleepdiary).</param>
+    /// <param name="limit">Max rows to retrieve.</param>
+    /// <param name="preferK8s">Whether to prefer Kubernetes.</param>
+    /// <returns>List of message rows.</returns>
+    public IReadOnlyList<(string MessageId, string ConsumerId, string Received, int ReceiveCount, string? Consumed)> InboxMessages(string service, int limit, bool preferK8s)
+    {
+        var target = service.ToLowerInvariant();
+        if (target != "knowledge" && target != "sleepdiary")
+        {
+            return [];
+        }
+
+        var query = $@"
+SET NOCOUNT ON;
+SELECT TOP ({limit})
+       CONVERT(nvarchar(36), MessageId),
+       CONVERT(nvarchar(36), ConsumerId),
+       CONVERT(nvarchar(23), Received, 126),
+       ReceiveCount,
+       COALESCE(CONVERT(nvarchar(23), Consumed, 126), '-')
+FROM {target}.InboxState
+ORDER BY Id DESC;
+";
+        var resultText = QuerySql(query, preferK8s);
+        if (string.IsNullOrWhiteSpace(resultText))
+        {
+            return [];
+        }
+
+        var lines = resultText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var rows = new List<(string MessageId, string ConsumerId, string Received, int ReceiveCount, string? Consumed)>();
+
+        foreach (var line in lines)
+        {
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 5 &&
+                Guid.TryParse(parts[0], out _) &&
+                int.TryParse(parts[3], out var count))
+            {
+                rows.Add((parts[0], parts[1], parts[2], count, parts[4]));
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>Cleans InboxState and related inbox outbox messages for replay testing.</summary>
+    /// <param name="service">Target service (knowledge, sleepdiary, or null for all).</param>
+    /// <param name="preferK8s">Whether to prefer Kubernetes.</param>
+    /// <param name="output">Output writer.</param>
+    /// <returns>Exit code.</returns>
+    public int CleanInbox(string? service, bool preferK8s, OutputWriter output)
+    {
+        var target = service?.ToLowerInvariant();
+        var cleanKnowledge = string.IsNullOrEmpty(target) || target == "knowledge";
+        var cleanSleepDiary = string.IsNullOrEmpty(target) || target == "sleepdiary";
+
+        if (!cleanKnowledge && !cleanSleepDiary)
+        {
+            output.Error($"Unknown service '{service}'. Supported services: knowledge, sleepdiary.");
+            return ExitCodes.NotFound;
+        }
+
+        var sb = new StringBuilder("SET NOCOUNT ON;\nSET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\n");
+        if (cleanKnowledge)
+        {
+            sb.AppendLine("DELETE FROM knowledge.OutboxMessage WHERE InboxMessageId IS NOT NULL;");
+            sb.AppendLine("DELETE FROM knowledge.InboxState;");
+        }
+
+        if (cleanSleepDiary)
+        {
+            sb.AppendLine("DELETE FROM sleepdiary.OutboxMessage WHERE InboxMessageId IS NOT NULL;");
+            sb.AppendLine("DELETE FROM sleepdiary.InboxState;");
+        }
+
+        return ExecuteSql(sb.ToString(), preferK8s, output);
     }
 
     /// <summary>Queries active RabbitMQ queues and their message counts.</summary>
