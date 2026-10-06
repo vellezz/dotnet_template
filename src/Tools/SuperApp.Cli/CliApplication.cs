@@ -36,6 +36,9 @@ internal static class CliApplication
             ContractsCommand.Create(common),
             HelmCommand.Create(common),
             EnvCommand.Create(common),
+            CallCommand.Create(common),
+            DbCommand.Create(common),
+            OutboxCommand.Create(common),
             E2eCommand.Create(common),
         };
     }
