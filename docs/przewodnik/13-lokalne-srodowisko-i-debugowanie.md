@@ -32,11 +32,18 @@ jako zamiennik wspólnej), ADR-0041 (NetworkPolicy).
 
 ---
 
-## Szybki start: `dotnet superapp env`
+## Szybki start: `dotnet superapp env` i diagnostyka
 
 ```bash
 dotnet superapp env up [--build] [--infra]   # start (--infra: tylko MSSQL, RabbitMQ, Redis, Keycloak) i czekanie na wszystkie komponenty
-dotnet superapp env status                   # kontenery (stan, health, jednorazowe z kodem wyjścia) i sondy HTTP; kod 2, gdy coś nie działa
+dotnet superapp env status                   # kontenery / pody (stan, health, jednorazowe z kodem wyjścia) i sondy HTTP; kod 2, gdy coś nie działa
+dotnet superapp env forward [--k8s]          # port-forward wszystkich usług Kubernetes na localhost
+dotnet superapp env dev <serwis> [--stop]    # tryb hybrydowy K8s: skaluje serwis do 0 i drukuje konfigurację dla IDE (--stop przywraca)
+dotnet superapp env logs <serwis> [-f]       # podgląd lub strumieniowanie logów komponentu
+dotnet superapp call <komponent> <ścieżka>   # zapytanie HTTP z automatycznym tokenem JWT i sformatowaną odpowiedzią JSON
+dotnet superapp outbox status [--watch]      # stan transakcyjnego outboxa w MSSQL oraz kolejki i błędy w RabbitMQ
+dotnet superapp inbox status|list|clean      # diagnostyka i czyszczenie stanu idempotencji MassTransit w InboxState
+dotnet superapp db query "<sql>"             # bezpośrednie zapytanie SQL przeciwko lokalnej bazie danych MSSQL
 dotnet superapp e2e                          # scenariusz end-to-end: brama, BFF, API wewnętrzne, kody błędów, zapis przez bramę, logowanie bff-web
 dotnet superapp env token reader --scope knowledge.catalog.read   # token użytkownika lokalnego realmu do curl
 dotnet superapp env down [--reset]           # stop; --reset usuwa wolumeny (baza od zera)
@@ -455,8 +462,16 @@ RabbitMQ) broker zamknie jednak kanał i wiadomość wróci do kolejki.
 
 ### 9.4 MSSQL: sesje, outbox, inbox, migracje
 
-Połączenie: SSMS / Azure Data Studio / Rider `localhost,1433`, `sa` / `Dev!Passw0rd1`, „Trust server certificate”. Z wiersza
-poleceń przez `sqlcmd` w kontenerze (w Git Bash dodaj `MSYS_NO_PATHCONV=1`, inaczej ścieżka `/opt/...` zostanie przepisana):
+Połączenie: SSMS / Azure Data Studio / Rider `localhost,1433`, `sa` / `Dev!Passw0rd1`, „Trust server certificate”.
+
+Najszybsza diagnostyka z wiersza poleceń nie wymaga `sqlcmd` ani zewnętrznych narzędzi:
+```bash
+dotnet superapp db query "SELECT MigrationId FROM knowledge.__EFMigrationsHistory"
+dotnet superapp outbox status
+dotnet superapp inbox status
+```
+
+Ręcznie przez `sqlcmd` w kontenerze (w Git Bash dodaj `MSYS_NO_PATHCONV=1`, inaczej ścieżka `/opt/...` zostanie przepisana):
 
 ```bash
 MSYS_NO_PATHCONV=1 docker compose -f deploy/local/docker-compose.yml exec mssql \
@@ -593,11 +608,16 @@ BFF nie ma bazy ani kolejek, więc z IDE uruchamia się go najprościej:
 2. Uruchom `Example.Bff` z IDE w trybie debug (profil `example-bff`, `http://localhost:5120`). Serwisy mogą działać w kontenerach
    albo z IDE: `appsettings.Development.json` wskazuje `localhost:5101` i `localhost:5102`.
 3. Breakpoint w akcji kontrolera (np. `ExperienceSummaryController.Get`) albo w `PartialResponseFetcher.FetchAsync`.
-4. Wywołaj BFF bezpośrednio z tokenem `dev-cli` (audience `example-bff` jest domyślne):
+4. Wywołaj BFF bezpośrednio (narzędzie repozytorium automatycznie pobiera token JWT z Keycloaka):
+   ```bash
+   dotnet superapp call example-bff /v1/me/summary                        # 200, części odpowiedzi ze statusem
+   dotnet superapp call example-bff /internal/v1/widgets/sleep-summary    # 200 (scope example.internal.read)
+   ```
+   Ręcznie z `curl` i tokenem `dev-cli` (audience `example-bff` jest domyślne):
    ```bash
    TOKEN=$(curl -s http://localhost:8081/realms/superapp/protocol/openid-connect/token      -d grant_type=password -d client_id=dev-cli -d username=editor -d password=editor      -d "scope=openid knowledge.library.read sleepdiary.entry.read example.internal.read"      | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
-   curl -i http://localhost:5120/v1/me/summary -H "Authorization: Bearer $TOKEN"                        # 200, części odpowiedzi ze statusem
-   curl -i http://localhost:5120/internal/v1/widgets/sleep-summary -H "Authorization: Bearer $TOKEN"    # 200 (scope example.internal.read)
+   curl -i http://localhost:5120/v1/me/summary -H "Authorization: Bearer $TOKEN"
+   curl -i http://localhost:5120/internal/v1/widgets/sleep-summary -H "Authorization: Bearer $TOKEN"
    ```
    Bez `example.internal.read` w żądaniu tokenu API wewnętrzne odpowiada `403` (polityka BFF, `code` `auth.missing_scope`). Przez bramę
    `/api/example/internal/...` daje `404`: trasa pasuje tylko do `/api/example/v{n}/...`.

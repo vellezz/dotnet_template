@@ -18,7 +18,7 @@
 >   i usuwa kod (nigdy nie zmienia bazy ani CIAM). Oba są idempotentne, a `--dry-run` / brak `--yes` pokazuje tylko plan.
 > - Na co dzień: `add usecase` (szkielet komendy lub zapytania z akcją), `migration add|list|script`, `contracts [--check]`,
 >   `contracts snapshot` + `contracts diff` (zmiany łamiące dla konsumentów, bez git albo względem rewizji git).
-> - Elementy: `add|remove aggregate|event|consumer|scope|flag|product-event|usecase`; środowisko: `env up|down|status|token`, `e2e`.
+> - Elementy: `add|remove aggregate|event|consumer|scope|flag|product-event|usecase`; środowisko i diagnostyka: `env up|down|status|forward|dev|logs|token`, `call`, `outbox`, `inbox`, `db query`, `e2e`.
 > - Każde polecenie przyjmuje `--json` i zwraca stałe kody wyjścia (0, 1, 2, 3), więc nadaje się do skryptów, CI i dla Copilota.
 > - Repozytorium samo przechodzi `doctor` bez błędów: pilnuje tego test `RepositoryDoctorTests` w `dotnet test`.
 
@@ -193,22 +193,111 @@ odmawia i wypisuje pliki. Agregat ze snapshotem migracji, scope wymagany przez k
 odłączyć ręcznie. Puste katalogi po usuniętych plikach znikają. Pełny cykl wszystkich poleceń (dodanie, build, testy, `doctor`,
 usunięcie) zostawia repozytorium identyczne.
 
-## 22.7 Środowisko lokalne: `env` i `e2e`
+## 22.7 Środowisko lokalne i diagnostyka: `env`, `call`, `outbox`, `inbox`, `db`, `e2e`
 
 | Polecenie | Co robi |
 |---|---|
 | `env up [--build] [--infra] [--timeout s]` | `docker compose` z profilem `app` (z `--infra` bez aplikacji), potem czeka, aż każdy komponent odpowie na `/health/live` (realm na discovery OIDC) |
 | `env down [--reset] [--k8s]` | zatrzymuje środowisko (Docker lub Kubernetes); `--reset` usuwa wolumeny / PV |
 | `env status [--k8s]` | kontenery ze stanem i health (jednorazowe `db-bootstrap`, `migrator`, `db-gateway-permissions` są poprawne po wyjściu z kodem 0) i sondy HTTP; w K8s lista podów i ich stan; kod `2`, gdy coś nie działa |
-| `env forward [--k8s]` | tworzy port-forward do wszystkich kluczowych usług Kubernetes w klastrze na localhost |
-| `env logs <service> [-f]` | wyświetla lub strumieniuje logi komponentu w Kubernetes lub Docker |
-| `env dev <service> [--stop]` | skaluje serwis w klastrze K8s do 0 replik i wypisuje konfigurację połączeń dla lokalnego IDE; `--stop` przywraca repliki w klastrze |
+| `env forward [--k8s]` | tworzy równoległy port-forward kluczowych usług z klastra Kubernetes na localhost (MSSQL, Keycloak, RabbitMQ, Redis, BFF-y, API) |
+| `env logs <service> [-f] [--k8s]` | wyświetla lub strumieniuje logi komponentu w Kubernetes lub Docker |
+| `env dev <service> [--stop]` | przygotowuje tryb hybrydowy: skaluje serwis w klastrze K8s do 0 replik i wypisuje konfigurację połączeń dla lokalnego IDE; `--stop` przywraca repliki w klastrze |
 | `env token <użytkownik> [--scope …] [--password …]` | token użytkownika lokalnego realmu (klient `dev-cli`, hasło = nazwa użytkownika), domyślnie ze wszystkimi scope serwisów i BFF-ów |
-| `call <komponent> <ścieżka>` | wykonuje zapytanie HTTP do serwisu lub BFF z automatycznym pobraniem tokenu JWT, pomiarem czasu i kolorowaniem JSON |
-| `db seed\|clean\|query` | zasilanie bazy deweloperskiej danymi testowymi (`seed`), czyszczenie tabel domenowych (`clean`) lub diagnostyczne zapytania SQL (`query`) |
-| `outbox status [--watch]` | weryfikuje stan transakcyjnego outboxa/inboxa MassTransit w MSSQL oraz kolejki i błędy w RabbitMQ |
-| `inbox status\|list\|clean` | diagnostyka stanu konsumentów w `InboxState`, lista przetworzonych wiadomości (`list`) oraz czyszczenie stanu idempotencji (`clean`) na potrzeby ponownego odtworzenia zdarzeń |
+| `call <komponent> <ścieżka> [opcje]` | wykonuje zapytanie HTTP do serwisu lub BFF z automatycznym pobraniem tokenu JWT, pomiarem czasu i kolorowaniem JSON |
+| `outbox status [--watch] [--k8s]` | weryfikuje stan transakcyjnego outboxa/inboxa MassTransit w MSSQL oraz kolejki i błędy w RabbitMQ |
+| `inbox status\|list\|clean [opcje]` | diagnostyka stanu konsumentów w `InboxState`, lista przetworzonych wiadomości (`list`) oraz bezpieczne czyszczenie stanu idempotencji (`clean`) procedurą składowaną |
+| `db query "<sql>" [--k8s]` | wykonuje diagnostyczne zapytanie SQL przeciwko lokalnej bazie danych SuperApp (MSSQL) bez instalowania zewnętrznych narzędzi |
 | `e2e` | scenariusz end-to-end na działającym środowisku: sondy, tokeny, dla każdego BFF trasa przez bramę z `404 http.not_found` i 32-znakowym `traceId`, `401 auth.invalid_token` bez tokenu, brak trasy do `/internal`, API wewnętrzne `200`/`403 auth.missing_scope`, zapis, odczyt i usunięcie wpisu dziennika przez bramę, pełne logowanie do `bff-web` (opis niżej); kod `2`, gdy któreś sprawdzenie nie przejdzie |
+
+### 22.7.1 Szybkie wywołania API i BFF: `call`
+
+Polecenie `call` rozwiązuje problem ręcznego pobierania tokenów OAuth2/OIDC i konstruowania nagłówków przy testowaniu usług z wiersza poleceń:
+
+```bash
+# Wywołanie endpointu BFF z automatycznym tokenem JWT użytkownika 'editor'
+dotnet superapp call example-bff /v1/me/summary
+
+# Wywołanie z innym użytkownikiem realmu i metodą POST z danymi JSON
+dotnet superapp call knowledge-api /v1/categories -X POST -d '{"name":"Architecture","slug":"architecture"}' --as reader
+
+# Odczyt danych z pliku i szczegółowe nagłówki odpowiedzi oraz czas wykonania
+dotnet superapp call knowledge-api /v1/categories -X POST -d @payload.json --verbose
+
+# Zapytanie anonimowe (bez nagłówka Authorization)
+dotnet superapp call example-bff /health/live --anonymous
+```
+
+Opcje:
+- `<component>`: nazwa komponentu (np. `example-bff`, `knowledge-api`, `sleepdiary-api`, `bff-web`);
+- `<path>`: ścieżka żądania (np. `/v1/materials` lub `/internal/v1/widgets/sleep-summary`);
+- `-X, --method <METODA>`: metoda HTTP (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, domyślnie `GET`);
+- `-d, --data <JSON|@plik>`: treść żądania (ciąg JSON lub ścieżka poprzedzona `@`);
+- `--as <użytkownik>`: użytkownik lokalnego realmu (`editor` lub `reader`, domyślnie `editor`);
+- `--anonymous`: wysyła żądanie bez nagłówka `Authorization`;
+- `--header, -H <Nazwa: Wartość>`: opcjonalne dodatkowe nagłówki HTTP;
+- `--token <JWT>`: jawny token zamiast pobierania automatycznego z Keycloak;
+- `--k8s`: kieruje wywołanie do portów klastra Kubernetes;
+- `-v, --verbose`: wypisuje status, nagłówki odpowiedzi oraz czas trwania zapytania;
+- `--json`: surowa odpowiedź JSON bez kolorowania i nagłówków konsoli.
+
+### 22.7.2 Diagnostyka asynchroniczna: `outbox` i `inbox`
+
+Weryfikacja komunikacji asynchronicznej opartej na MassTransit 8 i RabbitMQ (ADR-0005, ADR-0021, ADR-0035):
+
+```bash
+# Stan transakcyjnego outboxa we wszystkich serwisach oraz głębokości kolejek w RabbitMQ
+dotnet superapp outbox status
+
+# Ciągły monitoring outboxa i kolejek w czasie rzeczywistym
+dotnet superapp outbox status --watch
+
+# Zbiorczy stan InboxState (odebrane wiadomości, ponowienia, blokady)
+dotnet superapp inbox status
+
+# Ostatnie 10 odebranych wiadomości dla wskazanego serwisu
+dotnet superapp inbox list knowledge --limit 10
+
+# Wyczyszczenie stanu InboxState (np. w celu ponownego odtworzenia zdarzeń testowych)
+dotnet superapp inbox clean knowledge
+```
+
+- `outbox status`: odpytuje bazy MSSQL o oczekujące wiadomości (`OutboxMessage`, `OutboxState`) oraz pyta RabbitMQ o głębokość kolejek domenowych i obecność wiadomości w kolejkach błędów (`_error`);
+- `inbox status [serwis]`: sumuje rekordy w `InboxState`, wskazując liczbę ponowień (`ReceiveCount > 1`) oraz aktywne blokady (`Locked`);
+- `inbox list <serwis> [--limit n]`: wyświetla listę odebranych komunikatów z `MessageId`, identyfikatorem konsumenta i czasem odebrania/przetworzenia;
+- `inbox clean [serwis]`: wywołuje bezpieczną procedurę składowaną `dbo.sp_SuperApp_CleanInbox` wdrożoną w `deploy/sql/03-dev-diagnostics.sql`, czyszcząc idempotencję bez usuwania tabel.
+
+### 22.7.3 Zapytania diagnostyczne do bazy: `db query`
+
+Bezpośrednie odpytywanie bazy danych MSSQL z wiersza poleceń bez potrzeby posiadania narzędzia `sqlcmd` czy zewnętrznego klienta bazy:
+
+```bash
+# Sprawdzenie zaaplikowanych migracji w schemacie serwisu
+dotnet superapp db query "SELECT MigrationId FROM knowledge.__EFMigrationsHistory"
+
+# Diagnostyka sesji w lokalnej bramie
+dotnet superapp db query "SELECT Id, Subject, SessionId, ExpiresAt FROM gateway.Sessions"
+```
+
+Polecenie automatycznie wykrywa uruchomione środowisko (Docker Compose lub Kubernetes) i formatuje wynik w czytelnej tabeli konsolowej lub formacie JSON (`--json`).
+
+### 22.7.4 Praca z Kubernetes i tryb hybrydowy: `env forward`, `env dev`, `env logs`
+
+Usprawnienia dla pracy z lokalnym klastrem Kubernetes (`deploy/local/k8s`):
+
+```bash
+# Uruchomienie port-forwardingu wszystkich serwisów, baz i kolejek na localhost
+dotnet superapp env forward
+
+# Przełączenie serwisu w tryb hybrydowy (skalowanie do 0 replik w klastrze + zmienne dla IDE)
+dotnet superapp env dev knowledge
+
+# Przywrócenie serwisu do działania w klastrze po zakończeniu debugowania
+dotnet superapp env dev knowledge --stop
+
+# Podgląd i strumieniowanie logów wybranego komponentu
+dotnet superapp env logs knowledge-api -f
+```
 
 Logowanie do `bff-web` w `e2e` przechodzi drogę przeglądarki bez przeglądarki: `/bff/login` → formularz logowania lokalnego realmu
 (użytkownik `reader`) → odpowiedź `form_post` na callback bramy → przekierowanie do `/`. Sprawdza ciasteczko `__Host-bff` (`Secure`,

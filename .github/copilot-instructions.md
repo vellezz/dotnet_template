@@ -121,8 +121,13 @@ Layer-specific rules are in `.github/instructions/*.instructions.md` (BFF: `bff.
   `dotnet superapp add usecase`, migrations from `dotnet superapp migration add`, and contracts with their clients are regenerated with
   `dotnet superapp contracts` (check with `--check`; `contracts snapshot` before an API change and `contracts diff` after it report
   breaking changes, exit code 2). Aggregates, events, consumers, scopes, flags and product events start from
-  `dotnet superapp add aggregate|event|consumer|scope|flag|product-event`; the local environment is `dotnet superapp env up|status|down`
-  and `dotnet superapp e2e` checks it end to end.
+  `dotnet superapp add aggregate|event|consumer|scope|flag|product-event`.
+  For local testing and diagnostics: `dotnet superapp env up|status|down`, `env forward` (K8s port-forward), `env dev <service>`
+  (hybrid debugging), `env logs <service>` (log streaming), `env token <user>` (JWT), `dotnet superapp e2e` (full verification),
+  `dotnet superapp call <component> <path>` (invokes API/BFF with automatic JWT token acquisition and formatted response),
+  `dotnet superapp outbox status` (MassTransit transactional outbox and RabbitMQ queue lag),
+  `dotnet superapp inbox status|list|clean` (consumer idempotency diagnostics and clearing `InboxState`), and
+  `dotnet superapp db query "<sql>"` (diagnostic SQL queries against the local database).
 - Do not add NuGet packages or change versions without an explicit request; versions live in `Directory.Packages.props`.
   MediatR stays on 12.x and MassTransit on 8.x (last open-source versions, ADR-0035).
 - No secrets in `appsettings*.json` or code. Do not mention AI assistants in code, docs or commit messages.
