@@ -66,8 +66,19 @@ internal sealed class LocalHttp : IDisposable
     /// <param name="scopes">Requested scopes, e.g. <c>openid knowledge.catalog.read</c>.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>The access token and the granted scopes.</returns>
+    public Task<(string Token, string Scope)> TokenAsync(string tokenEndpoint, string user, string password, string scopes, CancellationToken cancellationToken) =>
+        TokenAsync(tokenEndpoint, user, password, scopes, hostHeader: null, cancellationToken);
+
+    /// <summary>Gets an access token of a local user from the local realm.</summary>
+    /// <param name="tokenEndpoint">Token endpoint of the realm.</param>
+    /// <param name="user">Local user, e.g. <c>reader</c>.</param>
+    /// <param name="password">Password of the user.</param>
+    /// <param name="scopes">Requested scopes, e.g. <c>openid knowledge.catalog.read</c>.</param>
+    /// <param name="hostHeader">Optional Host header to override issuer host in Keycloak (e.g. <c>keycloak:8080</c> for Kubernetes).</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    /// <returns>The access token and the granted scopes.</returns>
     /// <exception cref="InvalidOperationException">The realm refused the request; the message contains its answer.</exception>
-    public async Task<(string Token, string Scope)> TokenAsync(string tokenEndpoint, string user, string password, string scopes, CancellationToken cancellationToken = default)
+    public async Task<(string Token, string Scope)> TokenAsync(string tokenEndpoint, string user, string password, string scopes, string? hostHeader = null, CancellationToken cancellationToken = default)
     {
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -77,9 +88,20 @@ internal sealed class LocalHttp : IDisposable
             ["password"] = password,
             ["scope"] = scopes,
         });
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint)
+        {
+            Content = content,
+        };
+
+        if (!string.IsNullOrWhiteSpace(hostHeader))
+        {
+            request.Headers.Host = hostHeader;
+        }
+
         try
         {
-            using var response = await _client.PostAsync(tokenEndpoint, content, cancellationToken);
+            using var response = await _client.SendAsync(request, cancellationToken);
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
