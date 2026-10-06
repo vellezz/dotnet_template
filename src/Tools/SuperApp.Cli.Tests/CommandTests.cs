@@ -60,12 +60,12 @@ public sealed class CommandTests
     }
 
     [Fact]
-    public async Task Db_clean_with_unknown_service_exits_with_not_found()
+    public async Task Db_query_with_empty_sql_exits_with_invalid_arguments()
     {
-        var (exitCode, _, error) = await Run("db", "clean", "no-such-service");
+        var (exitCode, _, error) = await Run("db", "query", "   ");
 
-        Assert.Equal(ExitCodes.NotFound, exitCode);
-        Assert.Contains("no-such-service", error, StringComparison.Ordinal);
+        Assert.Equal(ExitCodes.InvalidArguments, exitCode);
+        Assert.Contains("empty", error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

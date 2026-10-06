@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 using SuperApp.Cli.Output;
 using SuperApp.Cli.Repository;
 
@@ -8,121 +7,52 @@ namespace SuperApp.Cli.LocalEnvironment;
 /// <summary>Interacts with MSSQL and RabbitMQ across local Kubernetes and Docker Compose environments (ADR-0021, ADR-0034).</summary>
 /// <remarks>
 /// Executes SQL commands via <c>sqlcmd</c> inside the running database container/pod and queries queue depths
-/// using <c>rabbitmqctl</c> to provide diagnostics and test data seeding without requiring external database drivers.
+/// using <c>rabbitmqctl</c> to provide diagnostics and message inspection without requiring external database drivers.
 /// </remarks>
 /// <param name="root">Repository root path.</param>
-internal sealed class DatabaseEnvironment(string root)
+/// <param name="model">Optional pre-scanned repository model.</param>
+internal sealed class DatabaseEnvironment(string root, RepositoryModel? model = null)
 {
     private const string SaPassword = "Dev!Passw0rd1";
     private const string DatabaseName = "SuperApp";
+    private readonly RepositoryModel _model = model ?? RepositoryScanner.Scan(root);
 
-    /// <summary>Seeds realistic development data into the services.</summary>
-    /// <param name="service">Target service (Knowledge, SleepDiary, or null for all).</param>
-    /// <param name="clean">Whether to wipe existing data before seeding.</param>
-    /// <param name="preferK8s">Whether to prefer Kubernetes over Docker Compose.</param>
-    /// <param name="output">Output writer.</param>
-    /// <returns>Exit code.</returns>
-    public int Seed(string? service, bool clean, bool preferK8s, OutputWriter output)
-    {
-        var target = service?.ToLowerInvariant();
-        var seedKnowledge = string.IsNullOrEmpty(target) || target == "knowledge";
-        var seedSleepDiary = string.IsNullOrEmpty(target) || target == "sleepdiary";
+    /// <summary>Checks whether the given service name is known in the repository.</summary>
+    /// <param name="service">Service name or key.</param>
+    /// <returns><see langword="true"/> if known.</returns>
+    public bool IsKnownService(string service) =>
+        _model.Services.Any(s => string.Equals(s.Key, service, StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(s.Name, service, StringComparison.OrdinalIgnoreCase));
 
-        if (!seedKnowledge && !seedSleepDiary)
-        {
-            output.Error($"Unknown service '{service}'. Supported services: knowledge, sleepdiary.");
-            return ExitCodes.NotFound;
-        }
+    /// <summary>Returns a comma-separated list of known service keys.</summary>
+    /// <returns>Known service keys.</returns>
+    public string KnownServicesList() =>
+        string.Join(", ", _model.Services.Select(s => s.Key));
 
-        if (clean)
-        {
-            output.Line("Cleaning existing data before seeding...");
-            Clean(service, preferK8s, output);
-        }
+    /// <summary>Normalizes service name or key to its canonical lower kebab-case key.</summary>
+    /// <param name="service">Service name or key.</param>
+    /// <returns>Canonical key, or null if not found.</returns>
+    public string? NormalizeServiceName(string service) =>
+        _model.Services.FirstOrDefault(s => string.Equals(s.Key, service, StringComparison.OrdinalIgnoreCase) ||
+                                           string.Equals(s.Name, service, StringComparison.OrdinalIgnoreCase))?.Key;
 
-        if (seedKnowledge)
-        {
-            output.Line("Seeding Knowledge service (categories, published articles, favorites)...");
-            var sqlKnowledge = BuildKnowledgeSeedSql();
-            var exit = ExecuteSql(sqlKnowledge, preferK8s, output);
-            if (exit != ExitCodes.Success)
-            {
-                output.Error("Failed to seed Knowledge database.");
-                return exit;
-            }
-        }
-
-        if (seedSleepDiary)
-        {
-            output.Line("Seeding SleepDiary service (7 days of sleep entries for test user)...");
-            var sqlSleepDiary = BuildSleepDiarySeedSql();
-            var exit = ExecuteSql(sqlSleepDiary, preferK8s, output);
-            if (exit != ExitCodes.Success)
-            {
-                output.Error("Failed to seed SleepDiary database.");
-                return exit;
-            }
-        }
-
-        output.Line("Database seeding completed successfully.");
-        return ExitCodes.Success;
-    }
-
-    /// <summary>Cleans development data from service tables.</summary>
-    /// <param name="service">Target service (Knowledge, SleepDiary, or null for all).</param>
-    /// <param name="preferK8s">Whether to prefer Kubernetes over Docker Compose.</param>
-    /// <param name="output">Output writer.</param>
-    /// <returns>Exit code.</returns>
-    public int Clean(string? service, bool preferK8s, OutputWriter output)
-    {
-        var target = service?.ToLowerInvariant();
-        var cleanKnowledge = string.IsNullOrEmpty(target) || target == "knowledge";
-        var cleanSleepDiary = string.IsNullOrEmpty(target) || target == "sleepdiary";
-
-        if (!cleanKnowledge && !cleanSleepDiary)
-        {
-            output.Error($"Unknown service '{service}'. Supported services: knowledge, sleepdiary.");
-            return ExitCodes.NotFound;
-        }
-
-        var sb = new StringBuilder("SET NOCOUNT ON;\nSET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\n");
-        if (cleanKnowledge)
-        {
-            sb.AppendLine("DELETE FROM knowledge.Favorites;");
-            sb.AppendLine("DELETE FROM knowledge.MaterialCompletions;");
-            sb.AppendLine("DELETE FROM knowledge.MaterialCategories;");
-            sb.AppendLine("DELETE FROM knowledge.ContentBlocks;");
-            sb.AppendLine("DELETE FROM knowledge.CollectionCategories;");
-            sb.AppendLine("DELETE FROM knowledge.CollectionItems;");
-            sb.AppendLine("DELETE FROM knowledge.Collections;");
-            sb.AppendLine("DELETE FROM knowledge.Materials;");
-            sb.AppendLine("DELETE FROM knowledge.Categories;");
-        }
-
-        if (cleanSleepDiary)
-        {
-            sb.AppendLine("DELETE FROM sleepdiary.SleepEntries;");
-        }
-
-        return ExecuteSql(sb.ToString(), preferK8s, output);
-    }
-
-    /// <summary>Queries summary of transactional Outbox and Inbox tables for registered services.</summary>
+    /// <summary>Queries summary of transactional Outbox and Inbox tables for all schemas in MSSQL.</summary>
     /// <param name="preferK8s">Whether to target Kubernetes or Docker Compose.</param>
     /// <returns>Rows containing outbox counts.</returns>
     public IReadOnlyList<(string Service, long OutboxPending, long InboxProcessed, long ActiveLocks)> OutboxSummary(bool preferK8s)
     {
         const string query = @"
 SET NOCOUNT ON;
-SELECT 'knowledge' AS Service,
-       (SELECT COUNT(*) FROM knowledge.OutboxMessage) AS OutboxPending,
-       (SELECT COUNT(*) FROM knowledge.InboxState) AS InboxProcessed,
-       (SELECT COUNT(*) FROM knowledge.OutboxState WHERE LockId IS NOT NULL) AS ActiveLocks
-UNION ALL
-SELECT 'sleepdiary' AS Service,
-       (SELECT COUNT(*) FROM sleepdiary.OutboxMessage) AS OutboxPending,
-       (SELECT COUNT(*) FROM sleepdiary.InboxState) AS InboxProcessed,
-       (SELECT COUNT(*) FROM sleepdiary.OutboxState WHERE LockId IS NOT NULL) AS ActiveLocks;
+DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql = @sql + IIF(@sql = N'', N'', N' UNION ALL ') +
+    N'SELECT ''' + s.name + N''' AS Service, ' +
+    N'(SELECT COUNT(*) FROM ' + QUOTENAME(s.name) + N'.OutboxMessage) AS OutboxPending, ' +
+    N'(SELECT COUNT(*) FROM ' + QUOTENAME(s.name) + N'.InboxState) AS InboxProcessed, ' +
+    N'(SELECT COUNT(*) FROM ' + QUOTENAME(s.name) + N'.OutboxState WHERE LockId IS NOT NULL) AS ActiveLocks '
+FROM sys.schemas s
+JOIN sys.tables t ON s.schema_id = t.schema_id
+WHERE t.name = 'OutboxMessage';
+IF @sql <> N'' EXEC sp_executesql @sql;
 ";
         var resultText = QuerySql(query, preferK8s);
         if (string.IsNullOrWhiteSpace(resultText))
@@ -137,7 +67,6 @@ SELECT 'sleepdiary' AS Service,
         {
             var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 4 &&
-                (parts[0].Equals("knowledge", StringComparison.OrdinalIgnoreCase) || parts[0].Equals("sleepdiary", StringComparison.OrdinalIgnoreCase)) &&
                 long.TryParse(parts[1], out var outbox) &&
                 long.TryParse(parts[2], out var inbox) &&
                 long.TryParse(parts[3], out var locks))
@@ -149,24 +78,24 @@ SELECT 'sleepdiary' AS Service,
         return rows;
     }
 
-    /// <summary>Queries summary of transactional InboxState tables for registered services.</summary>
+    /// <summary>Queries summary of transactional InboxState tables for all schemas in MSSQL.</summary>
     /// <param name="preferK8s">Whether to target Kubernetes or Docker Compose.</param>
     /// <returns>Rows containing inbox counts.</returns>
     public IReadOnlyList<(string Service, long Total, long Retried, long Locked)> InboxSummary(bool preferK8s)
     {
         const string query = @"
 SET NOCOUNT ON;
-SELECT 'knowledge' AS Service,
-       COUNT(*) AS Total,
-       COALESCE(SUM(CASE WHEN ReceiveCount > 1 THEN 1 ELSE 0 END), 0) AS Retried,
-       COALESCE(SUM(CASE WHEN LockId != '00000000-0000-0000-0000-000000000000' THEN 1 ELSE 0 END), 0) AS Locked
-FROM knowledge.InboxState
-UNION ALL
-SELECT 'sleepdiary' AS Service,
-       COUNT(*) AS Total,
-       COALESCE(SUM(CASE WHEN ReceiveCount > 1 THEN 1 ELSE 0 END), 0) AS Retried,
-       COALESCE(SUM(CASE WHEN LockId != '00000000-0000-0000-0000-000000000000' THEN 1 ELSE 0 END), 0) AS Locked
-FROM sleepdiary.InboxState;
+DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql = @sql + IIF(@sql = N'', N'', N' UNION ALL ') +
+    N'SELECT ''' + s.name + N''' AS Service, ' +
+    N'COUNT(*) AS Total, ' +
+    N'COALESCE(SUM(CASE WHEN ReceiveCount > 1 THEN 1 ELSE 0 END), 0) AS Retried, ' +
+    N'COALESCE(SUM(CASE WHEN LockId != ''00000000-0000-0000-0000-000000000000'' THEN 1 ELSE 0 END), 0) AS Locked ' +
+    N'FROM ' + QUOTENAME(s.name) + N'.InboxState '
+FROM sys.schemas s
+JOIN sys.tables t ON s.schema_id = t.schema_id
+WHERE t.name = 'InboxState';
+IF @sql <> N'' EXEC sp_executesql @sql;
 ";
         var resultText = QuerySql(query, preferK8s);
         if (string.IsNullOrWhiteSpace(resultText))
@@ -181,7 +110,6 @@ FROM sleepdiary.InboxState;
         {
             var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 4 &&
-                (parts[0].Equals("knowledge", StringComparison.OrdinalIgnoreCase) || parts[0].Equals("sleepdiary", StringComparison.OrdinalIgnoreCase)) &&
                 long.TryParse(parts[1], out var total) &&
                 long.TryParse(parts[2], out var retried) &&
                 long.TryParse(parts[3], out var locked))
@@ -193,29 +121,32 @@ FROM sleepdiary.InboxState;
         return rows;
     }
 
-    /// <summary>Lists recent messages stored in the service's InboxState table.</summary>
-    /// <param name="service">Service name (e.g. knowledge, sleepdiary).</param>
+    /// <summary>Lists recent messages stored in any service's InboxState table.</summary>
+    /// <param name="service">Service name or key.</param>
     /// <param name="limit">Max rows to retrieve.</param>
     /// <param name="preferK8s">Whether to prefer Kubernetes.</param>
     /// <returns>List of message rows.</returns>
     public IReadOnlyList<(string MessageId, string ConsumerId, string Received, int ReceiveCount, string? Consumed)> InboxMessages(string service, int limit, bool preferK8s)
     {
-        var target = service.ToLowerInvariant();
-        if (target != "knowledge" && target != "sleepdiary")
+        var schema = NormalizeServiceName(service) ?? service.ToLowerInvariant();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(schema, "^[a-zA-Z0-9_]+$"))
         {
             return [];
         }
 
         var query = $@"
 SET NOCOUNT ON;
-SELECT TOP ({limit})
-       CONVERT(nvarchar(36), MessageId),
-       CONVERT(nvarchar(36), ConsumerId),
-       CONVERT(nvarchar(23), Received, 126),
-       ReceiveCount,
-       COALESCE(CONVERT(nvarchar(23), Consumed, 126), '-')
-FROM {target}.InboxState
-ORDER BY Id DESC;
+IF EXISTS (SELECT 1 FROM sys.schemas s JOIN sys.tables t ON s.schema_id = t.schema_id WHERE s.name = '{schema}' AND t.name = 'InboxState')
+BEGIN
+    SELECT TOP ({limit})
+           CONVERT(nvarchar(36), MessageId),
+           CONVERT(nvarchar(36), ConsumerId),
+           CONVERT(nvarchar(23), Received, 126),
+           ReceiveCount,
+           COALESCE(CONVERT(nvarchar(23), Consumed, 126), '-')
+    FROM [{schema}].InboxState
+    ORDER BY Id DESC;
+END
 ";
         var resultText = QuerySql(query, preferK8s);
         if (string.IsNullOrWhiteSpace(resultText))
@@ -241,36 +172,34 @@ ORDER BY Id DESC;
     }
 
     /// <summary>Cleans InboxState and related inbox outbox messages for replay testing.</summary>
-    /// <param name="service">Target service (knowledge, sleepdiary, or null for all).</param>
+    /// <param name="service">Target service (or null for all schemas with InboxState).</param>
     /// <param name="preferK8s">Whether to prefer Kubernetes.</param>
     /// <param name="output">Output writer.</param>
     /// <returns>Exit code.</returns>
     public int CleanInbox(string? service, bool preferK8s, OutputWriter output)
     {
-        var target = service?.ToLowerInvariant();
-        var cleanKnowledge = string.IsNullOrEmpty(target) || target == "knowledge";
-        var cleanSleepDiary = string.IsNullOrEmpty(target) || target == "sleepdiary";
-
-        if (!cleanKnowledge && !cleanSleepDiary)
+        var target = !string.IsNullOrEmpty(service) ? (NormalizeServiceName(service) ?? service.ToLowerInvariant()) : null;
+        if (target is not null && !IsKnownService(target))
         {
-            output.Error($"Unknown service '{service}'. Supported services: knowledge, sleepdiary.");
+            output.Error($"Unknown service '{service}'. Known services: {KnownServicesList()}.");
             return ExitCodes.NotFound;
         }
 
-        var sb = new StringBuilder("SET NOCOUNT ON;\nSET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\n");
-        if (cleanKnowledge)
-        {
-            sb.AppendLine("DELETE FROM knowledge.OutboxMessage WHERE InboxMessageId IS NOT NULL;");
-            sb.AppendLine("DELETE FROM knowledge.InboxState;");
-        }
-
-        if (cleanSleepDiary)
-        {
-            sb.AppendLine("DELETE FROM sleepdiary.OutboxMessage WHERE InboxMessageId IS NOT NULL;");
-            sb.AppendLine("DELETE FROM sleepdiary.InboxState;");
-        }
-
-        return ExecuteSql(sb.ToString(), preferK8s, output);
+        var filter = target is not null ? $"AND s.name = '{target}'" : "";
+        var query = $@"
+SET NOCOUNT ON;
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql = @sql +
+    N'DELETE FROM ' + QUOTENAME(s.name) + N'.OutboxMessage WHERE InboxMessageId IS NOT NULL; ' +
+    N'DELETE FROM ' + QUOTENAME(s.name) + N'.InboxState; '
+FROM sys.schemas s
+JOIN sys.tables t ON s.schema_id = t.schema_id
+WHERE t.name = 'InboxState' {filter};
+IF @sql <> N'' EXEC sp_executesql @sql;
+";
+        return ExecuteSql(query, preferK8s, output);
     }
 
     /// <summary>Queries active RabbitMQ queues and their message counts.</summary>
@@ -422,135 +351,4 @@ ORDER BY Id DESC;
             return false;
         }
     }
-
-    private static string BuildKnowledgeSeedSql() =>
-        @"
-SET NOCOUNT ON;
-BEGIN TRANSACTION;
-
-DECLARE @catSleep UNIQUEIDENTIFIER = (SELECT TOP 1 Id FROM knowledge.Categories WHERE Slug = 'sleep-hygiene');
-IF @catSleep IS NULL
-BEGIN
-    SET @catSleep = NEWID();
-    INSERT INTO knowledge.Categories (Id, Name, Slug) VALUES (@catSleep, N'Sleep Hygiene', N'sleep-hygiene');
-END
-
-DECLARE @catNutrition UNIQUEIDENTIFIER = (SELECT TOP 1 Id FROM knowledge.Categories WHERE Slug = 'nutrition-and-rest');
-IF @catNutrition IS NULL
-BEGIN
-    SET @catNutrition = NEWID();
-    INSERT INTO knowledge.Categories (Id, Name, Slug) VALUES (@catNutrition, N'Nutrition & Rest', N'nutrition-and-rest');
-END
-
-DECLARE @catMental UNIQUEIDENTIFIER = (SELECT TOP 1 Id FROM knowledge.Categories WHERE Slug = 'mental-wellbeing');
-IF @catMental IS NULL
-BEGIN
-    SET @catMental = NEWID();
-    INSERT INTO knowledge.Categories (Id, Name, Slug) VALUES (@catMental, N'Mental Wellbeing', N'mental-wellbeing');
-END
-
-DECLARE @matCircadian UNIQUEIDENTIFIER = (SELECT TOP 1 Id FROM knowledge.Materials WHERE Title = N'Circadian Rhythms & Light Optimization');
-IF @matCircadian IS NULL
-BEGIN
-    SET @matCircadian = NEWID();
-    INSERT INTO knowledge.Materials (Id, Type, Title, Description, MainMediaUrl, MainMediaDurationSeconds, Status, ContentPlainText, ReadingTimeMinutes, CreatedAt, UpdatedAt, PublishedAt)
-    VALUES (@matCircadian, N'Article', N'Circadian Rhythms & Light Optimization', N'How blue light and morning sunlight regulate your master biological clock.', N'https://example.com/circadian.jpg', NULL, N'Published', N'Natural sunlight exposure within 30 minutes of waking triggers cortisol awakening response and sets your internal master clock for the entire day. Avoiding blue light 2 hours before bed allows natural melatonin secretion.', 6, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
-
-    INSERT INTO knowledge.MaterialCategories (MaterialId, CategoryId) VALUES (@matCircadian, @catSleep);
-END
-
-DECLARE @matMagnesium UNIQUEIDENTIFIER = (SELECT TOP 1 Id FROM knowledge.Materials WHERE Title = N'Magnesium & Sleep Architecture');
-IF @matMagnesium IS NULL
-BEGIN
-    SET @matMagnesium = NEWID();
-    INSERT INTO knowledge.Materials (Id, Type, Title, Description, MainMediaUrl, MainMediaDurationSeconds, Status, ContentPlainText, ReadingTimeMinutes, CreatedAt, UpdatedAt, PublishedAt)
-    VALUES (@matMagnesium, N'Article', N'Magnesium & Sleep Architecture', N'The biochemical mechanism of magnesium glycinate on GABA receptors.', N'https://example.com/magnesium.jpg', NULL, N'Published', N'Magnesium acts as an agonist for GABA receptors, promoting parasympathetic nervous tone, reducing sleep latency and supporting deep delta wave sleep.', 4, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
-
-    INSERT INTO knowledge.MaterialCategories (MaterialId, CategoryId) VALUES (@matMagnesium, @catNutrition);
-END
-
-DECLARE @matMindfulness UNIQUEIDENTIFIER = (SELECT TOP 1 Id FROM knowledge.Materials WHERE Title = N'Mindfulness & Sleep Latency');
-IF @matMindfulness IS NULL
-BEGIN
-    SET @matMindfulness = NEWID();
-    INSERT INTO knowledge.Materials (Id, Type, Title, Description, MainMediaUrl, MainMediaDurationSeconds, Status, ContentPlainText, ReadingTimeMinutes, CreatedAt, UpdatedAt, PublishedAt)
-    VALUES (@matMindfulness, N'Article', N'Mindfulness & Sleep Latency', N'Scientific breathing techniques to reduce pre-sleep autonomic arousal.', N'https://example.com/mindfulness.jpg', NULL, N'Published', N'Physiological sighs and 4-7-8 breathing shift autonomic balance from sympathetic fight-or-flight to rest-and-digest, lowering heart rate and bedtime latency.', 5, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
-
-    INSERT INTO knowledge.MaterialCategories (MaterialId, CategoryId) VALUES (@matMindfulness, @catMental);
-END
-
-DECLARE @editorUserId NVARCHAR(200) = N'c344d96e-1f0e-4212-885a-844a0c494a27';
-IF NOT EXISTS (SELECT 1 FROM knowledge.Favorites WHERE UserId = @editorUserId AND ItemId = @matCircadian)
-BEGIN
-    INSERT INTO knowledge.Favorites (Id, UserId, ItemType, ItemId, AddedAt) VALUES (NEWID(), @editorUserId, N'Material', @matCircadian, SYSDATETIMEOFFSET());
-END
-
-COMMIT TRANSACTION;
-";
-
-    private static string BuildSleepDiarySeedSql() =>
-        @"
-SET NOCOUNT ON;
-BEGIN TRANSACTION;
-
-DECLARE @userId NVARCHAR(200) = N'c344d96e-1f0e-4212-885a-844a0c494a27';
-DECLARE @today DATE = CAST(GETUTCDATE() AS DATE);
-DECLARE @i INT = 0;
-
-WHILE @i < 7
-BEGIN
-    DECLARE @entryDate DATE = DATEADD(DAY, -@i, @today);
-    DECLARE @bedTime DATETIME2(0) = DATEADD(MINUTE, 23 * 60, CAST(@entryDate AS DATETIME2(0)));
-    DECLARE @wakeTime DATETIME2(0) = DATEADD(MINUTE, 7 * 60 + 15 + (@i % 3) * 15, DATEADD(DAY, 1, CAST(@entryDate AS DATETIME2(0))));
-    DECLARE @latency INT = 10 + (@i % 4) * 5;
-    DECLARE @awakenings INT = @i % 2;
-    DECLARE @quality INT = 4 + (@i % 2);
-    DECLARE @timeInBed INT = DATEDIFF(MINUTE, @bedTime, @wakeTime);
-    DECLARE @sleepMinutes INT = @timeInBed - @latency - (@awakenings * 10);
-
-    IF EXISTS (SELECT 1 FROM sleepdiary.SleepEntries WHERE UserId = @userId AND Date = @entryDate)
-    BEGIN
-        UPDATE sleepdiary.SleepEntries
-        SET BedTime = @bedTime,
-            WakeTime = @wakeTime,
-            SleepLatencyMinutes = @latency,
-            Awakenings = @awakenings,
-            Quality = @quality,
-            TimeInBedMinutes = @timeInBed,
-            SleepMinutes = @sleepMinutes,
-            UpdatedAt = SYSDATETIMEOFFSET()
-        WHERE UserId = @userId AND Date = @entryDate;
-    END
-    ELSE
-    BEGIN
-        INSERT INTO sleepdiary.SleepEntries (
-            Id, UserId, Date, BedTime, WakeTime, SleepLatencyMinutes, Awakenings, Quality, Notes, TimeInBedMinutes, SleepMinutes, CreatedAt, UpdatedAt
-        )
-        VALUES (
-            NEWID(),
-            @userId,
-            @entryDate,
-            @bedTime,
-            @wakeTime,
-            @latency,
-            @awakenings,
-            @quality,
-            CASE @i
-                WHEN 0 THEN N'Woke up rested, energetic morning.'
-                WHEN 1 THEN N'Deep restorative sleep after evening workout.'
-                WHEN 2 THEN N'Quick sleep latency, quiet night.'
-                ELSE N'Solid continuous rest.'
-            END,
-            @timeInBed,
-            @sleepMinutes,
-            SYSDATETIMEOFFSET(),
-            SYSDATETIMEOFFSET()
-        );
-    END
-
-    SET @i = @i + 1;
-END;
-
-COMMIT TRANSACTION;
-";
 }

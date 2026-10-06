@@ -27,7 +27,7 @@ internal static class InboxCommand
     {
         var service = new Argument<string?>("service")
         {
-            Description = "Target service (knowledge, sleepdiary) or omitted for all services.",
+            Description = "Target service schema or omitted for all services.",
             Arity = ArgumentArity.ZeroOrOne,
         };
         var k8s = new Option<bool>("--k8s") { Description = "Target Kubernetes cluster (auto-detected if cluster is running)." };
@@ -56,8 +56,14 @@ internal static class InboxCommand
                 rows = rows.Where(r => r.Service.Equals(filter, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (rows.Count == 0)
                 {
-                    output.Error($"Unknown service '{filter}'. Supported services: knowledge, sleepdiary.");
-                    return ExitCodes.NotFound;
+                    if (!dbEnv.IsKnownService(filter))
+                    {
+                        output.Error($"Unknown service '{filter}'. Known services: {dbEnv.KnownServicesList()}.");
+                        return ExitCodes.NotFound;
+                    }
+
+                    output.Line($"No inbox records found for service '{filter}'.");
+                    return ExitCodes.Success;
                 }
             }
 
@@ -105,7 +111,7 @@ internal static class InboxCommand
     {
         var service = new Argument<string>("service")
         {
-            Description = "Target service (knowledge, sleepdiary).",
+            Description = "Target service schema.",
         };
         var limit = new Option<int>("--limit", "-n") { Description = "Maximum number of rows to return (default 20)." };
         var k8s = new Option<bool>("--k8s") { Description = "Target Kubernetes cluster (auto-detected if cluster is running)." };
@@ -126,11 +132,10 @@ internal static class InboxCommand
             }
 
             var targetService = parseResult.GetValue(service);
-            if (string.IsNullOrWhiteSpace(targetService) ||
-                (!targetService.Equals("knowledge", StringComparison.OrdinalIgnoreCase) &&
-                 !targetService.Equals("sleepdiary", StringComparison.OrdinalIgnoreCase)))
+            var dbEnv = new DatabaseEnvironment(root);
+            if (string.IsNullOrWhiteSpace(targetService) || !dbEnv.IsKnownService(targetService))
             {
-                output.Error($"Unknown service '{targetService}'. Supported services: knowledge, sleepdiary.");
+                output.Error($"Unknown service '{targetService}'. Known services: {dbEnv.KnownServicesList()}.");
                 return ExitCodes.NotFound;
             }
 
@@ -140,7 +145,6 @@ internal static class InboxCommand
                 max = 20;
             }
 
-            var dbEnv = new DatabaseEnvironment(root);
             var messages = dbEnv.InboxMessages(targetService, max, parseResult.GetValue(k8s));
 
             if (output.IsJson)
@@ -184,7 +188,7 @@ internal static class InboxCommand
     {
         var service = new Argument<string?>("service")
         {
-            Description = "Target service (knowledge, sleepdiary) or omitted for all services.",
+            Description = "Target service schema or omitted for all services.",
             Arity = ArgumentArity.ZeroOrOne,
         };
         var k8s = new Option<bool>("--k8s") { Description = "Target Kubernetes cluster (auto-detected if cluster is running)." };
