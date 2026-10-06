@@ -300,6 +300,154 @@ internal sealed class KubernetesEnvironment(string root, RepositoryModel model)
             pods.Select(p => (IReadOnlyList<string>)[p.Name, p.Status, p.Ready, p.Restarts.ToString(System.Globalization.CultureInfo.InvariantCulture), p.Age, p.Ok ? "yes" : "NO"]));
     }
 
+    /// <summary>Establishes port forwarding for all key services in Kubernetes.</summary>
+    /// <param name="mappings">List of (Service, LocalPort, RemotePort) tuples.</param>
+    /// <param name="output">Output writer.</param>
+    /// <param name="cancellationToken">Cancellation token to gracefully close the tunnels.</param>
+    /// <returns>Exit code.</returns>
+    public async Task<int> PortForward(IReadOnlyList<(string Service, int LocalPort, int RemotePort)> mappings, OutputWriter output, CancellationToken cancellationToken)
+    {
+        output.Line("Establishing port forwarding to Kubernetes services...");
+        var processes = new List<Process>();
+
+        try
+        {
+            foreach (var (service, localPort, remotePort) in mappings)
+            {
+                var start = new ProcessStartInfo("kubectl")
+                {
+                    WorkingDirectory = root,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    ArgumentList = { "port-forward", $"svc/{service}", $"{localPort}:{remotePort}", "--address", "0.0.0.0" },
+                };
+
+                var proc = Process.Start(start);
+                if (proc is not null)
+                {
+                    processes.Add(proc);
+                }
+            }
+
+            output.Table(
+                ["Service", "Local Port", "Remote Port", "URL"],
+                mappings.Select(m => (IReadOnlyList<string>)[m.Service, m.LocalPort.ToString(System.Globalization.CultureInfo.InvariantCulture), m.RemotePort.ToString(System.Globalization.CultureInfo.InvariantCulture), $"http://localhost:{m.LocalPort}"]));
+
+            output.Line();
+            output.Line("Port forwarding active. Press Ctrl+C to terminate...");
+
+            var tcs = new TaskCompletionSource();
+            using var reg = cancellationToken.Register(() => tcs.TrySetResult());
+            await tcs.Task;
+            return ExitCodes.Success;
+        }
+        finally
+        {
+            output.Line("Stopping port forwards...");
+            foreach (var proc in processes)
+            {
+                try
+                {
+                    if (!proc.HasExited)
+                    {
+                        proc.Kill(entireProcessTree: true);
+                    }
+                }
+                catch
+                {
+                    // Ignore process already dead
+                }
+
+                proc.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Tails or streams logs of a service in Kubernetes.</summary>
+    /// <param name="serviceName">Name of the service or pod.</param>
+    /// <param name="follow">Whether to follow/stream output.</param>
+    /// <param name="output">Output writer.</param>
+    /// <returns>Exit code.</returns>
+    public int Logs(string serviceName, bool follow, OutputWriter output)
+    {
+        var label = serviceName.EndsWith("-api", StringComparison.Ordinal) || serviceName.EndsWith("-bff", StringComparison.Ordinal) || serviceName.EndsWith("-worker", StringComparison.Ordinal)
+            ? serviceName
+            : $"{serviceName}-api";
+
+        var args = new List<string> { "logs", "-l", $"app.kubernetes.io/name={label}", "--tail=100" };
+        if (follow)
+        {
+            args.Add("-f");
+        }
+
+        var start = new ProcessStartInfo("kubectl")
+        {
+            WorkingDirectory = root,
+            UseShellExecute = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
+        };
+        foreach (var arg in args)
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        try
+        {
+            using var proc = Process.Start(start);
+            proc?.WaitForExit();
+            return proc?.ExitCode ?? ExitCodes.Failed;
+        }
+        catch (Exception ex)
+        {
+            output.Error($"Failed to fetch logs: {ex.Message}");
+            return ExitCodes.Failed;
+        }
+    }
+
+    /// <summary>Enables or disables hybrid development mode by scaling the service in Kubernetes.</summary>
+    /// <param name="serviceName">Service name.</param>
+    /// <param name="stop">Whether to restore normal replicas.</param>
+    /// <param name="output">Output writer.</param>
+    /// <returns>Exit code.</returns>
+    public int Dev(string serviceName, bool stop, OutputWriter output)
+    {
+        var normalized = serviceName.ToLowerInvariant().Replace("-api", "");
+        var targetDeploy = $"{normalized}-api";
+        var workerDeploy = $"{normalized}-worker";
+
+        if (stop)
+        {
+            output.Line($"Restoring replicas for {normalized} in Kubernetes...");
+            RunKubectl(output, "scale", $"deploy/{targetDeploy}", "--replicas=1");
+            RunKubectl(output, "scale", $"deploy/{workerDeploy}", "--replicas=1", "--ignore-not-found");
+            output.Line($"Replicas for {normalized} restored to 1.");
+            return ExitCodes.Success;
+        }
+
+        output.Line($"Scaling down {normalized} in Kubernetes for local IDE development...");
+        RunKubectl(output, "scale", $"deploy/{targetDeploy}", "--replicas=0");
+        RunKubectl(output, "scale", $"deploy/{workerDeploy}", "--replicas=0", "--ignore-not-found");
+
+        output.Line();
+        output.Line($"==> {normalized} scaled to 0 in cluster. Configure your local IDE with:");
+        output.Table(
+            ["Configuration Key", "Value"],
+            [
+                ["ConnectionStrings__Write", $"Server=localhost,1433;Database=SuperApp;User Id={normalized}_app;Password=Dev!Passw0rd1;TrustServerCertificate=True"],
+                ["ConnectionStrings__Read", $"Server=localhost,1433;Database=SuperApp;User Id={normalized}_app;Password=Dev!Passw0rd1;TrustServerCertificate=True"],
+                ["ConnectionStrings__RabbitMq", "amqp://guest:guest@localhost:5672/"],
+                ["ConnectionStrings__Redis", "localhost:6379"],
+                ["Authentication__Authority", "http://localhost:8081/realms/superapp"],
+                ["Authentication__RequireHttpsMetadata", "false"],
+            ]);
+        output.Line();
+        output.Line($"When done debugging, run: dotnet superapp env dev {normalized} --stop");
+        return ExitCodes.Success;
+    }
+
     private int RunKubectl(OutputWriter output, params string[] arguments)
     {
         var start = new ProcessStartInfo("kubectl")

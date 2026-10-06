@@ -27,13 +27,118 @@ internal static class EnvCommand
     /// <param name="common">Options shared by all commands.</param>
     /// <returns>The <c>env</c> command.</returns>
     public static Command Create(CommonOptions common) =>
-        new("env", "The local environment (docker compose or Kubernetes): start, stop, check, get a token.")
+        new("env", "The local environment (docker compose or Kubernetes): start, stop, check, forward, logs, dev, get a token.")
         {
             Up(common),
             Down(common),
             Status(common),
+            Forward(common),
+            Logs(common),
+            Dev(common),
             Token(common),
         };
+
+    private static Command Forward(CommonOptions common)
+    {
+        var k8s = new Option<bool>("--k8s") { Description = "Target Kubernetes cluster (default).", DefaultValueFactory = _ => true };
+        var command = new Command("forward", "Port-forward all local Kubernetes services to localhost (BFFs, APIs, Keycloak, RabbitMQ, MSSQL, Redis).")
+        {
+            k8s,
+        };
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var output = common.Output(parseResult);
+            if (common.FindRoot(parseResult, output) is not { } root)
+            {
+                return ExitCodes.NotFound;
+            }
+
+            var model = RepositoryScanner.Scan(root);
+            var k8sEnv = new KubernetesEnvironment(root, model);
+
+            var mappings = new List<(string Service, int LocalPort, int RemotePort)>
+            {
+                ("keycloak", 8081, 8080),
+                ("mssql", 1433, 1433),
+                ("rabbitmq", 15672, 15672),
+                ("redis", 6379, 6379),
+                ("superapp-docs", 8088, 80),
+                ("bff-web", 5000, 8080),
+            };
+
+            foreach (var bff in model.Bffs)
+            {
+                var localPort = model.Compose.FirstOrDefault(c => c.Name == $"{bff.Key}-bff")?.HostPorts.FirstOrDefault() ?? 5120;
+                mappings.Add(($"{bff.Key}-bff", localPort, 8080));
+            }
+
+            foreach (var svc in model.Services)
+            {
+                var localPort = model.Compose.FirstOrDefault(c => c.Name == $"{svc.Key}-api")?.HostPorts.FirstOrDefault() ?? 5101;
+                mappings.Add(($"{svc.Key}-api", localPort, 8080));
+            }
+
+            return await k8sEnv.PortForward(mappings, output, cancellationToken);
+        });
+        return command;
+    }
+
+    private static Command Logs(CommonOptions common)
+    {
+        var service = new Argument<string>("service") { Description = "Service or component name, e.g. knowledge-api, example-bff, keycloak." };
+        var follow = new Option<bool>("--follow", "-f") { Description = "Stream logs in real time." };
+        var k8s = new Option<bool>("--k8s") { Description = "Fetch logs from Kubernetes cluster (default).", DefaultValueFactory = _ => true };
+        var command = new Command("logs", "View or stream logs of a component in Kubernetes or Docker.")
+        {
+            service,
+            follow,
+            k8s,
+        };
+        command.SetAction(parseResult =>
+        {
+            var output = common.Output(parseResult);
+            if (common.FindRoot(parseResult, output) is not { } root)
+            {
+                return ExitCodes.NotFound;
+            }
+
+            var svcName = parseResult.GetValue(service)!;
+            var isFollow = parseResult.GetValue(follow);
+            var isK8s = parseResult.GetValue(k8s);
+
+            if (isK8s)
+            {
+                return new KubernetesEnvironment(root, RepositoryScanner.Scan(root)).Logs(svcName, isFollow, output);
+            }
+
+            return Docker(output, () => new DockerCompose(root).Run(["logs", isFollow ? "-f" : "--tail=100", svcName])) ?? ExitCodes.Success;
+        });
+        return command;
+    }
+
+    private static Command Dev(CommonOptions common)
+    {
+        var service = new Argument<string>("service") { Description = "Service name to debug locally, e.g. knowledge." };
+        var stop = new Option<bool>("--stop") { Description = "Stop local dev mode and restore cluster replicas to 1." };
+        var command = new Command("dev", "Prepare hybrid development: scale down service in cluster and print IDE connection config.")
+        {
+            service,
+            stop,
+        };
+        command.SetAction(parseResult =>
+        {
+            var output = common.Output(parseResult);
+            if (common.FindRoot(parseResult, output) is not { } root)
+            {
+                return ExitCodes.NotFound;
+            }
+
+            var svcName = parseResult.GetValue(service)!;
+            var isStop = parseResult.GetValue(stop);
+            return new KubernetesEnvironment(root, RepositoryScanner.Scan(root)).Dev(svcName, isStop, output);
+        });
+        return command;
+    }
 
     private static Command Up(CommonOptions common)
     {
