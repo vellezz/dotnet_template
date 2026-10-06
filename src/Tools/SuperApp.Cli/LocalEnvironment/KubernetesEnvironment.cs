@@ -422,14 +422,21 @@ internal sealed class KubernetesEnvironment(string root, RepositoryModel model)
         {
             output.Line($"Restoring replicas for {normalized} in Kubernetes...");
             RunKubectl(output, "scale", $"deploy/{targetDeploy}", "--replicas=1");
-            RunKubectl(output, "scale", $"deploy/{workerDeploy}", "--replicas=1", "--ignore-not-found");
+            if (DeploymentExists(workerDeploy))
+            {
+                RunKubectl(output, "scale", $"deploy/{workerDeploy}", "--replicas=1");
+            }
+
             output.Line($"Replicas for {normalized} restored to 1.");
             return ExitCodes.Success;
         }
 
         output.Line($"Scaling down {normalized} in Kubernetes for local IDE development...");
         RunKubectl(output, "scale", $"deploy/{targetDeploy}", "--replicas=0");
-        RunKubectl(output, "scale", $"deploy/{workerDeploy}", "--replicas=0", "--ignore-not-found");
+        if (DeploymentExists(workerDeploy))
+        {
+            RunKubectl(output, "scale", $"deploy/{workerDeploy}", "--replicas=0");
+        }
 
         output.Line();
         output.Line($"==> {normalized} scaled to 0 in cluster. Configure your local IDE with:");
@@ -524,6 +531,34 @@ internal sealed class KubernetesEnvironment(string root, RepositoryModel model)
         {
             output.Error($"helm is not available ({exception.Message}); install Helm and ensure it is in PATH.");
             return ExitCodes.Failed;
+        }
+    }
+
+    private bool DeploymentExists(string name)
+    {
+        try
+        {
+            var start = new ProcessStartInfo("kubectl")
+            {
+                WorkingDirectory = root,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                ArgumentList = { "get", "deploy", name },
+            };
+            using var proc = Process.Start(start);
+            if (proc is null)
+            {
+                return false;
+            }
+
+            proc.WaitForExit();
+            return proc.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
         }
     }
 }
