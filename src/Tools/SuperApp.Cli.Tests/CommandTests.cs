@@ -50,6 +50,37 @@ public sealed class CommandTests
         Assert.Equal(ExitCodes.InvalidArguments, exitCode);
     }
 
+    [Fact]
+    public async Task Call_with_unknown_component_exits_with_not_found()
+    {
+        var (exitCode, _, error) = await Run("call", "no-such-component", "/api/test");
+
+        Assert.Equal(ExitCodes.NotFound, exitCode);
+        Assert.Contains("no-such-component", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Db_clean_with_unknown_service_exits_with_not_found()
+    {
+        var (exitCode, _, error) = await Run("db", "clean", "no-such-service");
+
+        Assert.Equal(ExitCodes.NotFound, exitCode);
+        Assert.Contains("no-such-service", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Outbox_status_as_json_returns_valid_structure()
+    {
+        var (exitCode, output, _) = await Run("outbox", "status", "--json");
+
+        Assert.Equal(ExitCodes.Success, exitCode);
+        using var document = JsonDocument.Parse(output);
+        Assert.True(document.RootElement.TryGetProperty("outbox", out var outbox));
+        Assert.True(document.RootElement.TryGetProperty("queues", out var queues));
+        Assert.Equal(JsonValueKind.Array, outbox.ValueKind);
+        Assert.Equal(JsonValueKind.Array, queues.ValueKind);
+    }
+
     private static async Task<(int ExitCode, string Output, string Error)> Run(params string[] args)
     {
         using var output = new StringWriter();

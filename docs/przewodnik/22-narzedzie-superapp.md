@@ -198,9 +198,15 @@ usunięcie) zostawia repozytorium identyczne.
 | Polecenie | Co robi |
 |---|---|
 | `env up [--build] [--infra] [--timeout s]` | `docker compose` z profilem `app` (z `--infra` bez aplikacji), potem czeka, aż każdy komponent odpowie na `/health/live` (realm na discovery OIDC) |
-| `env down [--reset]` | zatrzymuje środowisko; `--reset` usuwa wolumeny (baza i jej dane) |
-| `env status` | kontenery ze stanem i health (jednorazowe `db-bootstrap`, `migrator`, `db-gateway-permissions` są poprawne po wyjściu z kodem 0) i sondy HTTP; kod `2`, gdy coś nie działa |
+| `env down [--reset] [--k8s]` | zatrzymuje środowisko (Docker lub Kubernetes); `--reset` usuwa wolumeny / PV |
+| `env status [--k8s]` | kontenery ze stanem i health (jednorazowe `db-bootstrap`, `migrator`, `db-gateway-permissions` są poprawne po wyjściu z kodem 0) i sondy HTTP; w K8s lista podów i ich stan; kod `2`, gdy coś nie działa |
+| `env forward [--k8s]` | tworzy port-forward do wszystkich kluczowych usług Kubernetes w klastrze na localhost |
+| `env logs <service> [-f]` | wyświetla lub strumieniuje logi komponentu w Kubernetes lub Docker |
+| `env dev <service> [--stop]` | skaluje serwis w klastrze K8s do 0 replik i wypisuje konfigurację połączeń dla lokalnego IDE; `--stop` przywraca repliki w klastrze |
 | `env token <użytkownik> [--scope …] [--password …]` | token użytkownika lokalnego realmu (klient `dev-cli`, hasło = nazwa użytkownika), domyślnie ze wszystkimi scope serwisów i BFF-ów |
+| `call <komponent> <ścieżka>` | wykonuje zapytanie HTTP do serwisu lub BFF z automatycznym pobraniem tokenu JWT, pomiarem czasu i kolorowaniem JSON |
+| `db seed\|clean\|query` | zasilanie bazy deweloperskiej danymi testowymi (`seed`), czyszczenie tabel domenowych (`clean`) lub diagnostyczne zapytania SQL (`query`) |
+| `outbox status [--watch]` | weryfikuje stan transakcyjnego outboxa/inboxa MassTransit w MSSQL oraz kolejki i błędy w RabbitMQ |
 | `e2e` | scenariusz end-to-end na działającym środowisku: sondy, tokeny, dla każdego BFF trasa przez bramę z `404 http.not_found` i 32-znakowym `traceId`, `401 auth.invalid_token` bez tokenu, brak trasy do `/internal`, API wewnętrzne `200`/`403 auth.missing_scope`, zapis, odczyt i usunięcie wpisu dziennika przez bramę, pełne logowanie do `bff-web` (opis niżej); kod `2`, gdy któreś sprawdzenie nie przejdzie |
 
 Logowanie do `bff-web` w `e2e` przechodzi drogę przeglądarki bez przeglądarki: `/bff/login` → formularz logowania lokalnego realmu
@@ -209,7 +215,7 @@ Logowanie do `bff-web` w `e2e` przechodzi drogę przeglądarki bez przeglądarki
 z nim (żądanie SPA przez bramę do BFF experience), `400` przy wylogowaniu z obcym `sid` oraz wylogowanie przez end-session CIAM, po
 którym `/bff/user` zwraca `401`. Scenariusz nie zostawia sesji ani danych.
 
-Adresy pochodzą z portów opublikowanych w `docker-compose.yml`, więc nowy serwis albo BFF dodany przez `add` jest od razu sondowany i
+Adresy pochodzą z portów opublikowanych w `docker-compose.yml` lub Kubernetes, więc nowy serwis albo BFF dodany przez `add` jest od razu sondowany i
 testowany. Certyfikat deweloperski bram jest akceptowany tylko dla `localhost`.
 
 ## 22.8 Helm i wdrożenia (ArgoCD): `helm generate`, `helm values`
