@@ -148,7 +148,7 @@ metadata:
   labels:
     app.kubernetes.io/name: mssql
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
     - port: 1433
       targetPort: 1433
