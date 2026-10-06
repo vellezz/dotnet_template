@@ -1,7 +1,6 @@
 # 1. Start: uruchomienie, mapa repozytorium, pierwsze żądanie
 
-**Czego się nauczysz:** jak przygotować maszynę, zbudować i przetestować rozwiązanie, uruchomić cały system lokalnie
-(w kontenerach albo z IDE), wykonać pierwsze żądania i gdzie w repozytorium szukać czego.
+Wymagania środowiskowe, procedura budowania i testowania rozwiązania, konfiguracja lokalnego środowiska deweloperskiego oraz struktura repozytorium.
 
 > **W skrócie**
 > - `dotnet build SuperApp.slnx` musi dać 0 błędów i 0 ostrzeżeń: ostrzeżenia są błędami, a reguły architektury są regułami kompilatora.

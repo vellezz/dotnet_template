@@ -50,7 +50,7 @@ feature flags: [21 Analityka i feature flags](21-analityka-i-feature-flags.md).
 
 ### Podstawy
 
-| Rozdział | Czego się nauczysz |
+| Rozdział | Zakres |
 |---|---|
 | [01 Start](01-start.md) | instalacja, build, testy, lokalne środowisko, mapa repozytorium, pierwsze żądanie |
 | [02 Architektura w praktyce](02-architektura-w-praktyce.md) | jak działa system od żądania HTTP do zdarzenia w innym serwisie; kod każdego kroku |
@@ -59,7 +59,7 @@ feature flags: [21 Analityka i feature flags](21-analityka-i-feature-flags.md).
 
 ### Warstwy i mechanizmy
 
-| Rozdział | Czego się nauczysz |
+| Rozdział | Zakres |
 |---|---|
 | [05 Model domeny](05-model-domeny.md) | agregaty, silne ID, value objects, błędy, `Result`, zdarzenia domenowe |
 | [06 Warstwa aplikacji](06-warstwa-aplikacji.md) | komendy, zapytania, pipeline MediatR, walidatory, handlery |
@@ -77,7 +77,7 @@ feature flags: [21 Analityka i feature flags](21-analityka-i-feature-flags.md).
 
 ### Praktyka
 
-| Rozdział | Czego się nauczysz |
+| Rozdział | Zakres |
 |---|---|
 | [16 Samouczek: pełna funkcja](16-samouczek-pelna-funkcja.md) | krok po kroku nowa funkcja w Knowledge: domena, dane, migracja, API, testy |
 | [17 Rozwiązywanie problemów](17-rozwiazywanie-problemow.md) | objaw → przyczyna → jak sprawdzić → naprawa |

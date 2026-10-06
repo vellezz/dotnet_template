@@ -1,10 +1,6 @@
 # 16. Samouczek: pełna funkcja „Ocena materiału”
 
-**Czego się nauczysz:** jak krok po kroku dodać do serwisu Knowledge kompletną funkcję, od agregatu po wywołanie `curl`:
-model domeny z value objectem, silnym ID i zdarzeniem domenowym; mapowanie EF Core z ograniczeniem `CHECK` i unikalnym
-indeksem; obsługę wyścigu przez Unit of Work; migrację; read model; komendę i zapytanie z cache unieważnianym po commicie;
-akcje kontrolerów z pełną dokumentacją i kontraktem OpenAPI; testy na wszystkich poziomach; weryfikację w lokalnym środowisku;
-wystawienie nowych operacji modułowi przez BFF experience.
+Implementacja wertykalnej funkcji „Ocena materiału” w serwisie Knowledge: model domeny (agregat, value object, zdarzenia), konfiguracja EF Core i migracje, read model, komenda i zapytanie z cache, kontrolery API, kontrakt OpenAPI, testy na wszystkich poziomach oraz ekspozycja przez BFF experience.
 
 **Wymagania wstępne:** działające środowisko z [1 Start](01-start.md) i [13 Lokalne środowisko](13-lokalne-srodowisko-i-debugowanie.md).
 Samouczek nie powtarza teorii; odsyła do rozdziałów [5 Model domeny](05-model-domeny.md), [6 Warstwa aplikacji](06-warstwa-aplikacji.md),

@@ -1,10 +1,6 @@
 # 12. Testy
 
-**Czego się nauczysz:** jakie projekty testów ma repozytorium i co należy do każdego z nich; jak działa xUnit v3 na
-Microsoft.Testing.Platform (MTP) i co z tego wynika przy pisaniu testów; jak testować agregaty bez mocków, handlery komend
-z fake'ami portów, prawdziwy pipeline MediatR, handlery zapytań i konfigurację EF na MSSQL w Testcontainers; dlaczego część
-testów integracyjnych nie może biec równolegle; jak czytać porażki testów architektury i jak testować analizatory; jak
-uruchamiać wybrane testy, debugować je i unikać testów niestabilnych.
+Strategia testowania i piramida testów: struktura projektów testowych, runner xUnit v3 na Microsoft.Testing.Platform (MTP), testy jednostkowe domeny bez mocków, testy warstwy aplikacji z fake'ami portów, testy integracyjne z Testcontainers (MSSQL), testy architektury NetArchTest oraz testy analizatorów Roslyn.
 
 **Wymagania wstępne:** [1 Start](01-start.md) (build, Docker), [3 Zasady](03-zasady.md), [5 Model domeny](05-model-domeny.md)
 (agregaty, `Result`, zdarzenia), [6 Warstwa aplikacji](06-warstwa-aplikacji.md) (komendy, zapytania, pipeline behaviors),

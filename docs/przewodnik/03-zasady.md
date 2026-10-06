@@ -1,7 +1,6 @@
 # 3. Zasady rozwiązania i dlaczego takie
 
-**Czego się nauczysz:** wszystkich zasad, których pilnuje review, build i testy; przy każdej: dlaczego istnieje, co ją wymusza
-i jak wygląda kod zły i dobry.
+Katalog zasad architektonicznych egzekwowanych przez reguły kompilacji, analizatory Roslyn i testy architektury wraz z uzasadnieniem i wzorcami implementacyjnymi.
 **Wymagania:** [01 Start](01-start.md), najlepiej też [02 Architektura w praktyce](02-architektura-w-praktyce.md).
 
 > **W skrócie**

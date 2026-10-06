@@ -1,7 +1,6 @@
 # 4. Gdzie umieścić nową funkcję: wybór kontekstu
 
-**Czego się nauczysz:** jak zdecydować, w którym bounded contexcie umieścić nową funkcję oraz czy to nowa operacja,
-nowe pole, nowy agregat czy nowy serwis; jak współpracują konteksty i jakich błędów nie popełniać.
+Kryteria podziału na bounded contexty: klasyfikacja nowej funkcji (operacja, pole, agregat czy osobny mikroserwis), współpraca między kontekstami i granice modeli.
 **Wymagania:** [03 Zasady](03-zasady.md).
 
 > **W skrócie**

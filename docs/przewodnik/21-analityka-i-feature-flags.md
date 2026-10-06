@@ -1,11 +1,6 @@
 # 21. Analityka produktowa i feature flags
 
-**Czego się nauczysz:** jak system współpracuje z PostHog Cloud EU (analityka produktowa, session replay, feature flags); co
-wolno wysłać do PostHog, a czego nigdy; jak powstaje pseudonim analityczny użytkownika i gdzie jest zwracany; jak działa proxy
-`/ingest` w bramie `bff-web` i dlaczego jest w kodzie, a nie w trasach z bazy; jak forwarder zamienia zdarzenia integracyjne
-na zdarzenia analityczne i dlaczego może obyć się bez inboxu; jak deklarować i czytać feature flags w serwisach (wartość
-domyślna, zakres DI, timeout, fallback, metryka); jak skonfigurować analitykę lokalnie i na klastrze; jak mają się zachować
-klienci web i mobile; jak to testować i obserwować.
+Integracja z platformą PostHog Cloud EU: analityka produktowa, ochrona prywatności (pseudonimizacja HMAC-SHA256, reguły RODO), proxy `/ingest` w bramie `bff-web`, forwarder zdarzeń analitycznych (`AnalyticsForwarder`), implementacja feature flags (`IFeatureFlags`), konfiguracja środowiskowa oraz testowanie.
 
 **Wymagania wstępne:** [02 Architektura w praktyce](02-architektura-w-praktyce.md) (procesy i bramy),
 [06 Warstwa aplikacji](06-warstwa-aplikacji.md) (handlery, `ICurrentUser`), [09 Bezpieczeństwo](09-bezpieczenstwo.md) (BFF,

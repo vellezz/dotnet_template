@@ -1,11 +1,6 @@
 # 13. Lokalne środowisko i debugowanie
 
-**Czego się nauczysz.** Co dokładnie uruchamia `deploy/local/docker-compose.yml` i dlaczego jest tak zbudowany (aliasy
-`*.svc.cluster.local`, jeden issuer Keycloaka, loginy bazy, Migrator, certyfikat); jak pracować w trybie hybrydowym (jeden
-element z IDE, reszta w kontenerach); jak postawić breakpoint w handlerze i dojść do niego przez API serwisu, przez BFF
-experience i przez bramę; jak zajrzeć
-do sesji, outboxa i inboxa w MSSQL, do kolejek RabbitMQ i do Redis; jak czytać logi i jak zresetować stan; czym lokalne środowisko
-różni się od klastra (lokalna brama jako zamiennik wspólnej bramy, brak NetworkPolicy).
+Konfiguracja lokalnego środowiska deweloperskiego (Docker Compose i Kubernetes): topologia sieciowa, tryb hybrydowy (debugowanie w IDE połączone z kontenerami), diagnostyka bazy danych MSSQL, kolejki RabbitMQ, pamięć podręczna Redis, logowanie i różnice względem klastra produkcyjnego.
 
 **Wymagania wstępne.** [Start](01-start.md) (narzędzia, pierwsze uruchomienie), [Architektura w praktyce](02-architektura-w-praktyce.md)
 (jakie procesy istnieją i jak rozmawiają). Decyzje: ADR-0031 (lokalny CIAM), ADR-0034 (lokalne środowisko), ADR-0037 (lokalna brama

@@ -1,10 +1,6 @@
 # 10. Zdarzenia i integracja
 
-**Czego się nauczysz:** czym różnią się zdarzenia domenowe od integracyjnych i kiedy użyć którego; jak dokładnie przebiega
-zapis komendy z dispatchem zdarzeń w `WriteDbContextBase`; jak zdarzenie trafia do outboxa, potem do RabbitMQ i do
-konsumenta w Workerze; jak MassTransit jest skonfigurowany w `AddAppMessaging`; jak pisać translatory i konsumentów;
-co oznacza „co najmniej raz” i jak zapewnić idempotencję; jak rozwijać kontrakty (`V1` → `V2`); jak podejrzeć wiadomości
-lokalnie i jak to wszystko testować.
+Komunikacja asynchroniczna i architektura sterowana zdarzeniami: separacja zdarzeń domenowych i integracyjnych, transakcyjny wzorzec Outbox/Inbox (MassTransit 8), konfiguracja RabbitMQ (topologia, wymiany fanout, kolejki quorum), implementacja translatorów i konsumentów, gwarancje dostarczania, idempotencja oraz ewolucja kontraktów.
 
 **Wymagania wstępne:** [05 Model domeny](05-model-domeny.md) (agregaty, `Raise`), [06 Warstwa aplikacji](06-warstwa-aplikacji.md)
 (pipeline MediatR, `TransactionBehavior`), [07 Dane i EF Core](07-dane-i-ef-core.md) (`WriteDbContext`, repozytoria).

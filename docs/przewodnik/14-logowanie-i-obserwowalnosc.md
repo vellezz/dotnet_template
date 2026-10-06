@@ -1,9 +1,6 @@
 # 14. Logowanie i obserwowalność
 
-**Czego się nauczysz.** Jak pisać logi przez `[LoggerMessage]` i skąd brać `EventId`; czego nie wolno logować i jakiego
-poziomu użyć; jak jest skonfigurowany OpenTelemetry (źródła śladów, metryki, eksport OTLP); jakie metryki własne ma framework
-i brama; jak `traceparent` płynie od bramy przez serwis i RabbitMQ do konsumenta; jak z `traceId` z odpowiedzi
-`ProblemDetails` dojść do śladu i logów konkretnego żądania.
+Standardy obserwowalności i logowania: strukturalne generowanie logów przez `[LoggerMessage]` z unikalnymi numerami `EventId`, konfiguracja OpenTelemetry (distributed tracing, metryki Prometheus/OTLP), propagacja kontekstu (`traceparent`) przez HTTP i RabbitMQ oraz korelacja za pomocą `traceId`.
 
 **Wymagania wstępne.** [Architektura w praktyce](02-architektura-w-praktyce.md) (procesy i przepływ żądania),
 [Lokalne środowisko i debugowanie](13-lokalne-srodowisko-i-debugowanie.md) (logi kontenerów). Decyzje: ADR-0008, ADR-0018.

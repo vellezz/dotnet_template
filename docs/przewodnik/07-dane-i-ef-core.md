@@ -1,9 +1,6 @@
 # 7. Dane i EF Core
 
-**Czego się nauczysz:** jak serwis przechowuje dane: jedna baza i schemat per serwis, dwa konteksty EF Core (zapis i odczyt)
-i co dokładnie robią ich klasy bazowe w `SuperApp.Framework`, jak pisać konfiguracje encji i repozytoria, jak działa Unit of Work
-i zamiana naruszeń unikalnych indeksów na błędy `Result`, czym jest i czego nie załatwia `rowversion`, jak budować zapytania
-na read modelach, jak tworzyć, przeglądać i wdrażać migracje (expand/contract, Migrator, skrypty dla DBA, sonda startowa).
+Model trwałości danych i EF Core: izolacja schematów bazodanowych per serwis, separacja kontekstów zapisu i odczytu (`WriteDbContextBase` / `ReadDbContextBase`), mapowania encji, repozytoria, transakcyjny Unit of Work, obsługa konfliktów współbieżności i unikalnych indeksów oraz zarządzanie migracjami.
 
 **Wymagania:** [01 Start](01-start.md) (lokalne środowisko), [05 Model domeny](05-model-domeny.md) (agregaty, silne ID,
 value objects), [06 Warstwa aplikacji](06-warstwa-aplikacji.md) (komendy, zapytania, `TransactionBehavior`).

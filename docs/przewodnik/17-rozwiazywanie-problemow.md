@@ -1,9 +1,6 @@
 # 17. Rozwiązywanie problemów
 
-**Czego się nauczysz.** Jak rozpoznać i naprawić najczęstsze problemy: błędy kompilacji (analizatory `APP001`–`APP006`,
-dokumentacja, przestrzenie nazw, podatności pakietów, testy architektury), odpowiedzi HTTP, które „nie powinny” wystąpić
-(401, 403, 400, 404, 409, 422, 429, 500, 502, 503), problemy z BFF experience i jego klientami serwisów, EF Core i migracjami,
-messagingiem, cache, bramą, Dockerem i Keycloakiem, analityką i feature flags.
+Diagnostyka i rozwiązywanie problemów: analiza błędów kompilacji i reguł analizatorów (`APP001`–`APP006`), diagnoza kodów statusu HTTP (4xx, 5xx), rozwiązywanie problemów z BFF, migracjami EF Core, brokerem MassTransit/RabbitMQ, pamięcią cache, bramą YARP, kontenerami oraz analityką.
 
 **Wymagania wstępne.** [Architektura w praktyce](02-architektura-w-praktyce.md) (gdzie co się dzieje),
 [Lokalne środowisko i debugowanie](13-lokalne-srodowisko-i-debugowanie.md) (jak zajrzeć do bazy, kolejek i logów),

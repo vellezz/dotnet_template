@@ -1,10 +1,6 @@
 # 9. Bezpieczeństwo: uwierzytelnienie, sesje, autoryzacja, sekrety
 
-**Czego się nauczysz:** jak w tym systemie działa logowanie OIDC, sesja BFF po stronie serwera, odświeżanie tokenów przy wielu
-replikach, ochrona CSRF, wylogowanie (zwykłe i back-channel), gateway mobile, walidacja tokenów w każdym serwisie (zero trust),
-trzy poziomy autoryzacji, scope i ich dodawanie, NetworkPolicy jako gwarancja izolacji experience, wywołania synchroniczne
-(przekazany token użytkownika albo client credentials), obsługa sekretów, czego nigdy nie logować i przed jakimi zagrożeniami chroni
-każdy mechanizm.
+Architektura bezpieczeństwa: uwierzytelnianie OIDC z PKCE, zarządzanie sesjami serwerowymi w bramie (wzorzec BFF), ochrona CSRF, procedury wylogowania, trójstopniowa autoryzacja, zarządzanie uprawnieniami (scope), walidacja JWT (Zero Trust), NetworkPolicy oraz zarządzanie sekretami.
 
 **Wymagania wstępne:** [1 Start](01-start.md) (lokalne środowisko z Keycloakiem), [2 Architektura w praktyce](02-architektura-w-praktyce.md),
 [6 Warstwa aplikacji](06-warstwa-aplikacji.md) (pipeline behaviors), [8 API i kontrakty](08-api-i-kontrakty.md) (odpowiedzi błędów,

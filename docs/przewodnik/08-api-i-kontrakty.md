@@ -1,10 +1,6 @@
 # 8. API HTTP i kontrakty OpenAPI
 
-**Czego się nauczysz:** jak żądanie HTTP przechodzi przez API serwisu, jak pisać cienkie kontrolery, jak opisać odpowiedzi,
-żeby kontrakt OpenAPI był kompletny, jak wyglądają błędy (`ProblemDetails` z `code` i `traceId`), jakie reguły ma kontrakt
-JSON, jak kontrakt powstaje przy buildzie i jak go przeglądać, czego nie wolno zmieniać w działającym API, z czego generuje
-się klientów, jak BFF experience wystawia API serwisów modułowi oraz jak samodzielnie wywołać API lokalnie (przez bramę, bezpośrednio
-do BFF i bezpośrednio do serwisu).
+Architektura API HTTP i specyfikacja kontraktów OpenAPI: implementacja kontrolerów, formatowanie odpowiedzi i błędów (`ProblemDetails`, reguły `code` i `traceId`), konwencje serializacji JSON, generowanie klientów Refitter, fasada BFF experience oraz wersjonowanie wstecznie zgodne.
 
 **Wymagania wstępne:** [1 Start](01-start.md) (uruchomione środowisko lokalne), [3 Zasady](03-zasady.md),
 [6 Warstwa aplikacji](06-warstwa-aplikacji.md) (komendy, zapytania, `Result`, pipeline behaviors). Bezpieczeństwo bram i tokenów

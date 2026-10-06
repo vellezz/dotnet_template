@@ -1,9 +1,6 @@
 # 11. Cache
 
-**Czego się nauczysz:** jak działa dwupoziomowy cache (`HybridCache`: pamięć procesu + Redis) i nasza nakładka
-`FailSafeCache`; co znaczy „świeży”, „przeterminowany” i „brakujący” wpis; jak dobrać `FailSafeOptions`; jak budować klucze
-i tagi; dlaczego unieważniamy **po commicie** i jak robi to `AfterCommitInterceptor`; czego nigdy nie cache'ujemy; jak
-obserwować i testować cache.
+Architektura pamięci podręcznej: dwupoziomowy model `HybridCache` (L1 w pamięci procesu + L2 w Redis), nakładka `FailSafeCache` (odporność na błędy odświeżania, ochrona przed stampede), konwencje nazewnictwa kluczy i tagów, unieważnianie po commicie transakcji (`AfterCommitInterceptor`) oraz reguły stosowania w architekturze CQRS.
 
 **Wymagania wstępne:** [06 Warstwa aplikacji](06-warstwa-aplikacji.md) (zapytania, handlery zapytań w Infrastructure),
 [07 Dane i EF Core](07-dane-i-ef-core.md) (`ReadDbContext`, read modele), [10 Zdarzenia i integracja](10-zdarzenia-i-integracja.md)

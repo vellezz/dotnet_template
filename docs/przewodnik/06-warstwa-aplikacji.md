@@ -1,10 +1,6 @@
 # 6. Warstwa aplikacji: komendy, zapytania, pipeline i handlery
 
-**Czego się nauczysz:** czym różni się komenda od zapytania, jak działa pipeline MediatR (logowanie → autoryzacja → walidacja
-→ transakcja) i co dokładnie dzieje się w każdym kroku, jak zbudowany jest pionowy wycinek `Features/{Agregat}/{PrzypadekUżycia}`,
-jak pisać walidatory zgodne z domeną, jak pisać handlery komend (i czego w nich nigdy nie robić), jak korzystać z
-`ICurrentUser`, `IClock` i innych portów, jak działają handlery zdarzeń domenowych i translatory oraz jak to wszystko się
-rejestruje. Przejdziesz przez pełne przykłady z Knowledge i SleepDiary.
+Implementacja warstwy aplikacji: komendy, zapytania, pipeline MediatR (logowanie, autoryzacja, walidacja, transakcja), pionowe wycinki Features, walidatory FluentValidation, orkiestracja handlerów oraz porty `ICurrentUser` i `IClock` na przykładach z Knowledge i SleepDiary.
 **Wymagania:** [05 Model domeny](05-model-domeny.md); pomocniczo [02 Architektura w praktyce](02-architektura-w-praktyce.md)
 i [03 Zasady](03-zasady.md).
 

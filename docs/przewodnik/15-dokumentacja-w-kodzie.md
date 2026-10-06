@@ -1,9 +1,6 @@
 # 15. Dokumentacja w kodzie
 
-**Czego się nauczysz:** jak pisać dokumentację XML zgodnie z ADR-0033: dla kogo, co musi zawierać, które tagi są wymagane i
-jak build to wymusza (CS1591, APP006, `<remarks>` we frameworku), jak dokumentować `Result` z kodami błędów, rekordy pozycyjne,
-implementacje (`<inheritdoc />`) i przykłady, jak dokumentacja kontrolerów trafia do kontraktu OpenAPI oraz jak recenzować
-dokumentację w pull requeście.
+Standardy dokumentacji XML w kodzie (ADR-0033): wymagania kompilatora i analizatorów (CS1591, APP006), struktura tagów (`<summary>`, `<remarks>`, `<param>`, `<returns>`), dokumentowanie typów `Result` z kodami błędów, generowanie dokumentacji OpenAPI z kontrolerów oraz reguły code review.
 **Wymagania:** [03 Zasady](03-zasady.md); przydadzą się [05 Model domeny](05-model-domeny.md) i
 [06 Warstwa aplikacji](06-warstwa-aplikacji.md), bo przykłady pochodzą z tych warstw.
 

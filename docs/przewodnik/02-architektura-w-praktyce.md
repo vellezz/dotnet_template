@@ -1,9 +1,6 @@
 # 2. Architektura w praktyce: jak działa system od żądania do zdarzenia
 
-**Czego się nauczysz.** Z jakich procesów składa się system i co każdy z nich robi; jak żądanie przeglądarki przechodzi przez
-bramę `bff-web`, BFF experience, serwis, pipeline MediatR, agregat i transakcję aż do odpowiedzi `ProblemDetails`; jak działa zapytanie z cache;
-jak zdarzenie integracyjne trafia przez outbox i RabbitMQ do konsumenta; jak proces startuje i co sprawdzają sondy; gdzie
-są composition rooty i co rejestrują.
+Architektura procesów i przepływ żądań: od bramy brzegowej YARP (`bff-web`) i BFF experience, przez pipeline MediatR, agregat domenowy i transakcyjny outbox, po publikację zdarzeń do RabbitMQ, obsługę cache oraz composition rooty.
 
 **Wymagania wstępne.** [Start](01-start.md) (uruchomione środowisko), [Zasady](03-zasady.md). Rozdział jest „mapą”: szczegóły
 poszczególnych warstw opisują [Warstwa aplikacji](06-warstwa-aplikacji.md), [Dane i EF Core](07-dane-i-ef-core.md),

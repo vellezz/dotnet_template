@@ -1,10 +1,6 @@
 # 5. Model domeny: agregaty, identyfikatory, value objects, błędy i zdarzenia
 
-**Czego się nauczysz:** jak w tym repozytorium projektuje się i pisze model domeny: agregaty (`AggregateRoot`, fabryki,
-niezmienniki, prywatne settery, kolekcje, operacje idempotentne, czas przekazywany z zewnątrz), jak wyznaczać granice agregatów,
-jak pisać silnie typowane ID i value objects, jak definiować błędy i posługiwać się `Result`, kiedy i jak zgłaszać zdarzenia
-domenowe oraz czym są repozytoria. Zobaczysz od środka cztery prawdziwe agregaty: `Category`, `SleepEntry`, `Material`
-(z treścią blokową) i `Collection`.
+Zasady implementacji warstwy domeny: projektowanie agregatów (`AggregateRoot`, niezmienniki, idempotencja), silnie typowane identyfikatory, value objects, obsługa błędów za pomocą typu `Result`, zdarzenia domenowe oraz interfejsy repozytoriów na przykładach agregatów `Category`, `SleepEntry`, `Material` i `Collection`.
 **Wymagania:** [03 Zasady](03-zasady.md), [04 Wybór kontekstu](04-wybor-kontekstu.md); pomocniczo
 [02 Architektura w praktyce](02-architektura-w-praktyce.md). Po tym rozdziale czytaj [06 Warstwa aplikacji](06-warstwa-aplikacji.md).
 
