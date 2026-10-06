@@ -61,6 +61,13 @@ metadata:
   name: {{ $name }}
   labels:
     {{- include "superapp.labels" . | nindent 4 }}
+    superapp.io/enabled: "true"
+    superapp.io/component: "bff"
+    superapp.io/experience: {{ .Values.experience | quote }}
+  annotations:
+    superapp.io/title: {{ printf "%s Experience BFF" (.Values.experience | title) | quote }}
+    superapp.io/openapi-path: "/openapi/public.json"
+    superapp.io/category: "BFF"
 spec:
   selector:
     app.kubernetes.io/name: {{ $name }}

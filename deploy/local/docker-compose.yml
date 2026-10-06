@@ -293,5 +293,16 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # Centralny portal OpenAPI / Scalar (ADR-0037, Opcja 3): podgląd specyfikacji wszystkich BFF i serwisów per środowisko.
+  docs:
+    profiles: [docs, app]
+    image: nginx:alpine
+    ports:
+      - "8088:80"
+    volumes:
+      - ./docs/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docs/index.html:/usr/share/nginx/html/index.html:ro
+
 volumes:
   mssql-data:
+

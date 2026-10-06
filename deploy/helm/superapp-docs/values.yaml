@@ -1,0 +1,32 @@
+# SuperApp Documentation Portal (Dynamic Kubernetes Service Discovery)
+# NOTE: The documentation portal should NOT be deployed in production environments (prod).
+# Set enabled: false or omit helm release on production clusters.
+enabled: true
+
+replicaCount: 1
+
+image:
+  repository: nginx
+  tag: alpine
+  pullPolicy: IfNotPresent
+
+# Kubernetes CoreDNS ClusterIP resolver for dynamic reverse proxy
+dnsResolver: "10.96.0.10"
+
+# Dynamic Kubernetes Service Discovery across all namespaces
+discovery:
+  enabled: true
+  interval: "10s"
+
+service:
+  type: LoadBalancer
+  port: 8088
+  targetPort: 80
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

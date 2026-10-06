@@ -1,0 +1,27 @@
+{{- if .Values.discovery.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "superapp-docs.fullname" . }}-discovery
+  labels:
+    {{- include "superapp-docs.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "superapp-docs.fullname" . }}-discovery
+  labels:
+    {{- include "superapp-docs.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "superapp-docs.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "superapp-docs.fullname" . }}-discovery
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

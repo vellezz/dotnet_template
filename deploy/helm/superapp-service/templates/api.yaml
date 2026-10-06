@@ -57,6 +57,14 @@ metadata:
   name: {{ $name }}
   labels:
     {{- include "superapp.labels" . | nindent 4 }}
+    superapp.io/enabled: "true"
+    superapp.io/component: "service"
+    superapp.io/service: {{ .Values.service | quote }}
+    superapp.io/experience: {{ .Values.experience | quote }}
+  annotations:
+    superapp.io/title: {{ printf "%s Domain API" (.Values.service | title) | quote }}
+    superapp.io/openapi-path: "/openapi/v1.json"
+    superapp.io/category: "Domain Service"
 spec:
   selector:
     app.kubernetes.io/name: {{ $name }}

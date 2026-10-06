@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "superapp-docs.fullname" . }}
+  labels:
+    {{- include "superapp-docs.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "superapp-docs.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "superapp-docs.labels" . | nindent 8 }}
+    spec:
+      {{- if .Values.discovery.enabled }}
+      serviceAccountName: {{ include "superapp-docs.fullname" . }}
+      {{- end }}
+      containers:
+        - name: web
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.discovery.enabled }}
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /usr/share/nginx/html/api
+              (
+                while true; do
+                  if [ -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
+                    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+                    curl -sk -H "Authorization: Bearer $TOKEN" "https://kubernetes.default.svc/api/v1/services?labelSelector=superapp.io%2Fenabled%3Dtrue" > /usr/share/nginx/html/api/k8s-services.json.tmp 2>/dev/null
+                    if [ -s /usr/share/nginx/html/api/k8s-services.json.tmp ]; then
+                      mv -f /usr/share/nginx/html/api/k8s-services.json.tmp /usr/share/nginx/html/api/k8s-services.json
+                    fi
+                  fi
+                  sleep {{ .Values.discovery.interval | default "10s" }}
+                done
+              ) &
+              exec nginx -g "daemon off;"
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: nginx.conf
+            - name: config
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "superapp-docs.fullname" . }}-config

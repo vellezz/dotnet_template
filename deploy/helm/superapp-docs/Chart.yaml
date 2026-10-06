@@ -1,0 +1,6 @@
+apiVersion: v2
+name: superapp-docs
+description: Central OpenAPI Contracts Portal with Scalar UI and git-sync sidecar (Option 3 GitOps).
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
