@@ -63,6 +63,96 @@ data:
         ALTER ROLE [db_owner] ADD MEMBER [superapp_migrator];
     END
 
+  03-dev-diagnostics.sql: |
+    SET NOCOUNT ON;
+    SET QUOTED_IDENTIFIER ON;
+    SET ANSI_NULLS ON;
+    GO
+
+    CREATE OR ALTER PROCEDURE dbo.sp_SuperApp_OutboxSummary
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+        DECLARE @sql NVARCHAR(MAX) = N'';
+        SELECT @sql = @sql + IIF(@sql = N'', N'', N' UNION ALL ') +
+            N'SELECT ''' + s.name + N''' AS Service, ' +
+            N'CAST((SELECT COUNT_BIG(*) FROM ' + QUOTENAME(s.name) + N'.OutboxMessage) AS BIGINT) AS OutboxPending, ' +
+            N'CAST((SELECT COUNT_BIG(*) FROM ' + QUOTENAME(s.name) + N'.InboxState) AS BIGINT) AS InboxProcessed, ' +
+            N'CAST((SELECT COUNT_BIG(*) FROM ' + QUOTENAME(s.name) + N'.OutboxState WHERE LockId IS NOT NULL) AS BIGINT) AS ActiveLocks '
+        FROM sys.schemas s
+        JOIN sys.tables t ON s.schema_id = t.schema_id
+        WHERE t.name = 'OutboxMessage';
+
+        IF @sql <> N''
+            EXEC sp_executesql @sql;
+    END;
+    GO
+
+    CREATE OR ALTER PROCEDURE dbo.sp_SuperApp_InboxSummary
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+        DECLARE @sql NVARCHAR(MAX) = N'';
+        SELECT @sql = @sql + IIF(@sql = N'', N'', N' UNION ALL ') +
+            N'SELECT ''' + s.name + N''' AS Service, ' +
+            N'COUNT_BIG(*) AS Total, ' +
+            N'CAST(COALESCE(SUM(CASE WHEN ReceiveCount > 1 ELSE 0 END), 0) AS BIGINT) AS Retried, ' +
+            N'CAST(COALESCE(SUM(CASE WHEN LockId != ''00000000-0000-0000-0000-000000000000'' THEN 1 ELSE 0 END), 0) AS BIGINT) AS Locked ' +
+            N'FROM ' + QUOTENAME(s.name) + N'.InboxState '
+        FROM sys.schemas s
+        JOIN sys.tables t ON s.schema_id = t.schema_id
+        WHERE t.name = 'InboxState';
+
+        IF @sql <> N''
+            EXEC sp_executesql @sql;
+    END;
+    GO
+
+    CREATE OR ALTER PROCEDURE dbo.sp_SuperApp_InboxMessages
+        @Schema sysname,
+        @Limit INT = 20
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+        IF EXISTS (SELECT 1 FROM sys.schemas s JOIN sys.tables t ON s.schema_id = t.schema_id WHERE s.name = @Schema AND t.name = 'InboxState')
+        BEGIN
+            DECLARE @sql NVARCHAR(MAX) = N'
+                SELECT TOP (@pLimit)
+                       MessageId,
+                       ConsumerId,
+                       Received,
+                       ReceiveCount,
+                       Consumed
+                FROM ' + QUOTENAME(@Schema) + N'.InboxState
+                ORDER BY Id DESC;';
+
+            EXEC sp_executesql @sql, N'@pLimit INT', @pLimit = @Limit;
+        END
+    END;
+    GO
+
+    CREATE OR ALTER PROCEDURE dbo.sp_SuperApp_CleanInbox
+        @Schema sysname = NULL
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+        SET QUOTED_IDENTIFIER ON;
+        SET ANSI_NULLS ON;
+
+        DECLARE @sql NVARCHAR(MAX) = N'';
+        SELECT @sql = @sql +
+            N'DELETE FROM ' + QUOTENAME(s.name) + N'.OutboxMessage WHERE InboxMessageId IS NOT NULL; ' +
+            N'DELETE FROM ' + QUOTENAME(s.name) + N'.InboxState; '
+        FROM sys.schemas s
+        JOIN sys.tables t ON s.schema_id = t.schema_id
+        WHERE t.name = 'InboxState'
+          AND (@Schema IS NULL OR s.name = @Schema);
+
+        IF @sql <> N''
+            EXEC sp_executesql @sql;
+    END;
+    GO
+
   bootstrap.sh: |
     #!/bin/bash
     set -e
@@ -82,6 +172,9 @@ data:
     done
 
     /opt/mssql-tools18/bin/sqlcmd -C -b -S 127.0.0.1 -U sa -P "Dev!Passw0rd1" -d SuperApp -i /scripts/01-bootstrap.sql
+    if [ -f /scripts/03-dev-diagnostics.sql ]; then
+      /opt/mssql-tools18/bin/sqlcmd -C -b -S 127.0.0.1 -U sa -P "Dev!Passw0rd1" -d SuperApp -i /scripts/03-dev-diagnostics.sql
+    fi
     echo "Database SuperApp bootstrapped successfully."
 ---
 apiVersion: apps/v1

@@ -8,10 +8,10 @@ using SuperApp.Cli.Repository;
 
 namespace SuperApp.Cli.LocalEnvironment;
 
-/// <summary>Interacts with MSSQL via ADO.NET and RabbitMQ across local development environments (ADR-0021, ADR-0034).</summary>
+/// <summary>Interacts with MSSQL via stored procedures and RabbitMQ across local development environments (ADR-0021, ADR-0034).</summary>
 /// <remarks>
-/// Queries transactional Outbox and Inbox tables using typed <see cref="SqlConnection"/> without requiring external
-/// process shells or sqlcmd text parsing.
+/// Queries transactional Outbox and Inbox tables using typed stored procedures (<c>deploy/sql/03-dev-diagnostics.sql</c>)
+/// without inline SQL queries or sqlcmd text parsing.
 /// </remarks>
 /// <param name="root">Repository root path.</param>
 /// <param name="model">Optional pre-scanned repository model.</param>
@@ -53,29 +53,21 @@ internal sealed class DatabaseEnvironment(string root, RepositoryModel? model = 
     {
         try
         {
-            using var connection = new SqlConnection(ConnectionString);
-            connection.Open();
-
-            var schemas = GetSchemasWithTable(connection, "OutboxMessage");
+            using var connection = OpenConnection();
+            using var cmd = new SqlCommand("dbo.sp_SuperApp_OutboxSummary", connection)
+            {
+                CommandType = CommandType.StoredProcedure,
+            };
+            using var reader = cmd.ExecuteReader();
             var results = new List<(string Service, long OutboxPending, long InboxProcessed, long ActiveLocks)>();
 
-            foreach (var schema in schemas)
+            while (reader.Read())
             {
-                var query = $@"
-                    SELECT (SELECT COUNT_BIG(*) FROM [{schema}].OutboxMessage) AS OutboxPending,
-                           (SELECT COUNT_BIG(*) FROM [{schema}].InboxState) AS InboxProcessed,
-                           (SELECT COUNT_BIG(*) FROM [{schema}].OutboxState WHERE LockId IS NOT NULL) AS ActiveLocks;";
-
-                using var cmd = new SqlCommand(query, connection);
-                using var reader = cmd.ExecuteReader();
-                if (reader.Read())
-                {
-                    results.Add((
-                        schema,
-                        reader.GetInt64(0),
-                        reader.GetInt64(1),
-                        reader.GetInt64(2)));
-                }
+                results.Add((
+                    reader.GetString(0),
+                    reader.GetInt64(1),
+                    reader.GetInt64(2),
+                    reader.GetInt64(3)));
             }
 
             return results;
@@ -93,30 +85,21 @@ internal sealed class DatabaseEnvironment(string root, RepositoryModel? model = 
     {
         try
         {
-            using var connection = new SqlConnection(ConnectionString);
-            connection.Open();
-
-            var schemas = GetSchemasWithTable(connection, "InboxState");
+            using var connection = OpenConnection();
+            using var cmd = new SqlCommand("dbo.sp_SuperApp_InboxSummary", connection)
+            {
+                CommandType = CommandType.StoredProcedure,
+            };
+            using var reader = cmd.ExecuteReader();
             var results = new List<(string Service, long Total, long Retried, long Locked)>();
 
-            foreach (var schema in schemas)
+            while (reader.Read())
             {
-                var query = $@"
-                    SELECT COUNT_BIG(*) AS Total,
-                           COALESCE(SUM(CASE WHEN ReceiveCount > 1 THEN 1 ELSE 0 END), 0) AS Retried,
-                           COALESCE(SUM(CASE WHEN LockId != '00000000-0000-0000-0000-000000000000' THEN 1 ELSE 0 END), 0) AS Locked
-                    FROM [{schema}].InboxState;";
-
-                using var cmd = new SqlCommand(query, connection);
-                using var reader = cmd.ExecuteReader();
-                if (reader.Read())
-                {
-                    results.Add((
-                        schema,
-                        reader.GetInt64(0),
-                        Convert.ToInt64(reader.GetValue(1)),
-                        Convert.ToInt64(reader.GetValue(2))));
-                }
+                results.Add((
+                    reader.GetString(0),
+                    reader.GetInt64(1),
+                    reader.GetInt64(2),
+                    reader.GetInt64(3)));
             }
 
             return results;
@@ -142,20 +125,12 @@ internal sealed class DatabaseEnvironment(string root, RepositoryModel? model = 
 
         try
         {
-            using var connection = new SqlConnection(ConnectionString);
-            connection.Open();
-
-            var query = $@"
-                SELECT TOP (@Limit)
-                       MessageId,
-                       ConsumerId,
-                       Received,
-                       ReceiveCount,
-                       Consumed
-                FROM [{schema}].InboxState
-                ORDER BY Id DESC;";
-
-            using var cmd = new SqlCommand(query, connection);
+            using var connection = OpenConnection();
+            using var cmd = new SqlCommand("dbo.sp_SuperApp_InboxMessages", connection)
+            {
+                CommandType = CommandType.StoredProcedure,
+            };
+            cmd.Parameters.Add("@Schema", SqlDbType.NVarChar, 128).Value = schema;
             cmd.Parameters.Add("@Limit", SqlDbType.Int).Value = limit;
 
             using var reader = cmd.ExecuteReader();
@@ -196,25 +171,17 @@ internal sealed class DatabaseEnvironment(string root, RepositoryModel? model = 
 
         try
         {
-            using var connection = new SqlConnection(ConnectionString);
-            connection.Open();
-
-            var schemas = target is not null
-                ? [target]
-                : GetSchemasWithTable(connection, "InboxState");
-
-            foreach (var schema in schemas)
+            using var connection = OpenConnection();
+            using var cmd = new SqlCommand("dbo.sp_SuperApp_CleanInbox", connection)
             {
-                var sql = $@"
-                    SET QUOTED_IDENTIFIER ON;
-                    SET ANSI_NULLS ON;
-                    DELETE FROM [{schema}].OutboxMessage WHERE InboxMessageId IS NOT NULL;
-                    DELETE FROM [{schema}].InboxState;";
-
-                using var cmd = new SqlCommand(sql, connection);
-                cmd.ExecuteNonQuery();
+                CommandType = CommandType.StoredProcedure,
+            };
+            if (target is not null)
+            {
+                cmd.Parameters.Add("@Schema", SqlDbType.NVarChar, 128).Value = target;
             }
 
+            cmd.ExecuteNonQuery();
             return ExitCodes.Success;
         }
         catch (SqlException ex)
@@ -232,9 +199,7 @@ internal sealed class DatabaseEnvironment(string root, RepositoryModel? model = 
     {
         try
         {
-            using var connection = new SqlConnection(ConnectionString);
-            connection.Open();
-
+            using var connection = OpenConnection();
             using var cmd = new SqlCommand(sql, connection);
             using var reader = cmd.ExecuteReader();
 
@@ -343,29 +308,43 @@ internal sealed class DatabaseEnvironment(string root, RepositoryModel? model = 
         return queues.OrderBy(q => q.Queue, StringComparer.Ordinal).ToList();
     }
 
-    private static List<string> GetSchemasWithTable(SqlConnection connection, string tableName)
+    private SqlConnection OpenConnection()
     {
-        const string query = @"
-            SELECT s.name
-            FROM sys.schemas s
-            JOIN sys.tables t ON s.schema_id = t.schema_id
-            WHERE t.name = @TableName
-            ORDER BY s.name;";
+        var connection = new SqlConnection(ConnectionString);
+        connection.Open();
+        EnsureDiagnosticsInstalled(connection);
+        return connection;
+    }
 
-        using var cmd = new SqlCommand(query, connection);
-        cmd.Parameters.Add("@TableName", SqlDbType.NVarChar).Value = tableName;
-
-        using var reader = cmd.ExecuteReader();
-        var schemas = new List<string>();
-        while (reader.Read())
+    private void EnsureDiagnosticsInstalled(SqlConnection connection)
+    {
+        try
         {
-            var name = reader.GetString(0);
-            if (Regex.IsMatch(name, "^[a-zA-Z0-9_]+$"))
+            using var checkCmd = new SqlCommand("SELECT OBJECT_ID('dbo.sp_SuperApp_InboxSummary', 'P')", connection);
+            if (checkCmd.ExecuteScalar() is not DBNull and not null)
             {
-                schemas.Add(name);
+                return;
+            }
+
+            var scriptPath = Path.Combine(root, "deploy", "sql", "03-dev-diagnostics.sql");
+            if (File.Exists(scriptPath))
+            {
+                var script = File.ReadAllText(scriptPath);
+                var batches = Regex.Split(script, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                foreach (var batch in batches)
+                {
+                    if (!string.IsNullOrWhiteSpace(batch))
+                    {
+                        using var cmd = new SqlCommand(batch, connection);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
             }
         }
-        return schemas;
+        catch
+        {
+            // Silently continue if permissions or script missing
+        }
     }
 
     private string RunProcess(bool preferK8s, string targetComponent, IReadOnlyList<string> k8sArgs, IReadOnlyList<string> dockerArgs)
