@@ -1,11 +1,6 @@
 # 22. Narzędzie `dotnet superapp`
 
-**Czego się nauczysz:** jak zainstalować i aktualizować narzędzie deweloperskie repozytorium; jak sprawdzić spójność repozytorium
-(`doctor`) i naprawić to, co narzędzie umie naprawić samo; jak szybko znaleźć wolny port, zakres EventId albo listę scope
-(`list`, `info`); jak jednym poleceniem dodać lub usunąć serwis, BFF i klienta serwisu (`add`, `remove`); jak dodać regułę
-`doctor`; jak korzysta z narzędzia Copilot.
-
-**Wymagania wstępne:** [01 Start](01-start.md). Decyzja: [ADR-0046](../adr/0046-narzedzie-deweloperskie-superapp.md).
+Narzędzie CLI repozytorium (`src/Tools/SuperApp.Cli`, [ADR-0046](../adr/0046-narzedzie-deweloperskie-superapp.md)) do weryfikacji spójności, scaffoldingu modułów i elementów domeny, zarządzania kontraktami oraz diagnostyki środowiska lokalnego (Docker Compose i Kubernetes). Wymagania wstępne: [01 Start](01-start.md).
 
 > **W skrócie**
 >
@@ -298,6 +293,8 @@ dotnet superapp env dev knowledge --stop
 # Podgląd i strumieniowanie logów wybranego komponentu
 dotnet superapp env logs knowledge-api -f
 ```
+
+### 22.7.5 Scenariusz end-to-end: `e2e`
 
 Logowanie do `bff-web` w `e2e` przechodzi drogę przeglądarki bez przeglądarki: `/bff/login` → formularz logowania lokalnego realmu
 (użytkownik `reader`) → odpowiedź `form_post` na callback bramy → przekierowanie do `/`. Sprawdza ciasteczko `__Host-bff` (`Secure`,
