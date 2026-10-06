@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mssql-init-scripts
+  namespace: default
+data:
+  01-bootstrap.sql: |
+    SET NOCOUNT ON;
+    DECLARE @Services TABLE ([Schema] sysname PRIMARY KEY);
+    INSERT INTO @Services ([Schema]) VALUES
+        (N'gateway'),
+        (N'knowledge'),
+        (N'sleepdiary');
+
+    DECLARE @schema sysname, @sql nvarchar(max);
+    DECLARE services CURSOR LOCAL FAST_FORWARD FOR SELECT [Schema] FROM @Services;
+    OPEN services;
+    FETCH NEXT FROM services INTO @schema;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        DECLARE @role sysname = @schema + N'_role';
+        DECLARE @user sysname = @schema + N'_app';
+
+        IF SCHEMA_ID(@schema) IS NULL
+        BEGIN
+            SET @sql = N'CREATE SCHEMA ' + QUOTENAME(@schema) + N' AUTHORIZATION dbo;';
+            EXEC (@sql);
+        END
+
+        IF DATABASE_PRINCIPAL_ID(@role) IS NULL
+        BEGIN
+            SET @sql = N'CREATE ROLE ' + QUOTENAME(@role) + N';';
+            EXEC (@sql);
+        END
+
+        SET @sql = N'GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::' + QUOTENAME(@schema) + N' TO ' + QUOTENAME(@role) + N';';
+        EXEC (@sql);
+
+        IF DATABASE_PRINCIPAL_ID(@user) IS NULL AND SUSER_ID(@user) IS NOT NULL
+        BEGIN
+            SET @sql = N'CREATE USER ' + QUOTENAME(@user) + N' FOR LOGIN ' + QUOTENAME(@user) + N' WITH DEFAULT_SCHEMA = ' + QUOTENAME(@schema) + N';';
+            EXEC (@sql);
+        END
+
+        IF DATABASE_PRINCIPAL_ID(@user) IS NOT NULL
+        BEGIN
+            SET @sql = N'ALTER ROLE ' + QUOTENAME(@role) + N' ADD MEMBER ' + QUOTENAME(@user) + N';';
+            EXEC (@sql);
+        END
+
+        FETCH NEXT FROM services INTO @schema;
+    END
+    CLOSE services;
+    DEALLOCATE services;
+
+    -- superapp_migrator user
+    IF DATABASE_PRINCIPAL_ID(N'superapp_migrator') IS NULL AND SUSER_ID(N'superapp_migrator') IS NOT NULL
+    BEGIN
+        CREATE USER [superapp_migrator] FOR LOGIN [superapp_migrator];
+    END
+    IF DATABASE_PRINCIPAL_ID(N'superapp_migrator') IS NOT NULL
+    BEGIN
+        ALTER ROLE [db_owner] ADD MEMBER [superapp_migrator];
+    END
+
+  bootstrap.sh: |
+    #!/bin/bash
+    set -e
+    echo "Waiting for MSSQL to accept connections..."
+    for i in {1..90}; do
+      if /opt/mssql-tools18/bin/sqlcmd -C -b -S 127.0.0.1 -U sa -P "Dev!Passw0rd1" -Q "SELECT 1" >/dev/null 2>&1; then
+        echo "MSSQL is up!"
+        break
+      fi
+      sleep 2
+    done
+
+    /opt/mssql-tools18/bin/sqlcmd -C -b -S 127.0.0.1 -U sa -P "Dev!Passw0rd1" -Q "IF DB_ID(N'SuperApp') IS NULL CREATE DATABASE [SuperApp];"
+
+    for login in superapp_migrator gateway_app knowledge_app sleepdiary_app; do
+      /opt/mssql-tools18/bin/sqlcmd -C -b -S 127.0.0.1 -U sa -P "Dev!Passw0rd1" -Q "IF SUSER_ID(N'${login}') IS NULL CREATE LOGIN [${login}] WITH PASSWORD = N'Dev!Passw0rd1', CHECK_POLICY = OFF;"
+    done
+
+    /opt/mssql-tools18/bin/sqlcmd -C -b -S 127.0.0.1 -U sa -P "Dev!Passw0rd1" -d SuperApp -i /scripts/01-bootstrap.sql
+    echo "Database SuperApp bootstrapped successfully."
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mssql
+  namespace: default
+  labels:
+    app.kubernetes.io/name: mssql
+    app.kubernetes.io/component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mssql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mssql
+        app.kubernetes.io/component: database
+    spec:
+      containers:
+        - name: mssql
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 1433
+              name: mssql
+          env:
+            - name: ACCEPT_EULA
+              value: "Y"
+            - name: MSSQL_SA_PASSWORD
+              value: "Dev!Passw0rd1"
+            - name: MSSQL_PID
+              value: "Developer"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2048Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/bash
+                  - -c
+                  - "/scripts/bootstrap.sh > /tmp/bootstrap.log 2>&1 &"
+      volumes:
+        - name: scripts
+          configMap:
+            name: mssql-init-scripts
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mssql
+  namespace: default
+  labels:
+    app.kubernetes.io/name: mssql
+spec:
+  type: ClusterIP
+  ports:
+    - port: 1433
+      targetPort: 1433
+      name: mssql
+  selector:
+    app.kubernetes.io/name: mssql

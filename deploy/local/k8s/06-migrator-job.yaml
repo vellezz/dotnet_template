@@ -1,0 +1,85 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: superapp-migrator
+  namespace: default
+  labels:
+    app.kubernetes.io/name: superapp-migrator
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: superapp-migrator
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrator
+          image: superapp-local-migrator:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: migrator-secrets
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gateway-permissions
+  namespace: default
+  labels:
+    app.kubernetes.io/name: gateway-permissions
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 120
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gateway-permissions
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: wait-for-migrator
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for gateway schema tables to be created by migrator..."
+              for i in {1..60}; do
+                count=$(/opt/mssql-tools18/bin/sqlcmd -C -b -S mssql -U sa -P "Dev!Passw0rd1" -d SuperApp -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID(N'gateway');" 2>/dev/null || echo 0)
+                if [ "$count" -ge 1 ]; then
+                  echo "Gateway tables exist ($count tables found)!"
+                  break
+                fi
+                sleep 2
+              done
+      containers:
+        - name: apply-permissions
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Applying gateway permissions..."
+              /opt/mssql-tools18/bin/sqlcmd -C -b -S mssql -U sa -P "Dev!Passw0rd1" -d SuperApp -Q "
+              SET NOCOUNT ON;
+              DECLARE @table sysname, @sql nvarchar(max);
+              DECLARE tables CURSOR LOCAL FAST_FORWARD FOR
+                  SELECT name FROM sys.tables
+                  WHERE schema_id = SCHEMA_ID(N'gateway')
+                    AND name IN (N'Clusters', N'Destinations', N'Routes', N'RouteMethods', N'RouteHosts', N'RouteTransforms');
+              OPEN tables;
+              FETCH NEXT FROM tables INTO @table;
+              WHILE @@FETCH_STATUS = 0
+              BEGIN
+                  SET @sql = N'DENY INSERT, UPDATE, DELETE ON [gateway].' + QUOTENAME(@table) + N' TO [gateway_role];';
+                  EXEC (@sql);
+                  FETCH NEXT FROM tables INTO @table;
+              END
+              CLOSE tables;
+              DEALLOCATE tables;
+              "
+              echo "Gateway permissions applied successfully."
