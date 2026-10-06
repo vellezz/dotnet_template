@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Wersja** | 1.4 |
+| **Wersja** | 1.5 |
 | **Status** | Projekt, do przeglądu |
-| **Data** | 2026-10-01 |
+| **Data** | 2026-10-07 |
 | **Właściciel** | Zespół Architektury SuperApp |
 | **Szablon** | arc42 |
 | **Decyzje szczegółowe** | [`docs/adr/`](adr/README.md) (ADR-0001 … ADR-0047) |
@@ -27,6 +27,7 @@
 | 1.2 | 2026-10-02 | Zespół Architektury SuperApp | `dotnet superapp`: `contracts snapshot` i `contracts diff` (zmiany łamiące kontraktów OpenAPI bez git albo względem rewizji git), pełne logowanie do `bff-web` w `e2e` (formularz CIAM, ciasteczko sesji, CSRF, wylogowanie) |
 | 1.3 | 2026-10-02 | Zespół Architektury SuperApp | Dokumentacja rozwiązania element po elemencie: [`dokumentacja-rozwiazania.md`](dokumentacja-rozwiazania.md) (projekty, interfejsy, konfiguracja, kody błędów, nietypowe rozwiązania, ograniczenia) |
 | 1.4 | 2026-10-02 | Zespół Architektury SuperApp | Odczyt `Result` sprawdzany przez kompilator (ADR-0047): `Result.Error` jako `Error?` z atrybutami nullability, bez `ErrorOrNull`, `Result<T>` bez `Value`; projekt `SuperApp.Framework.Testing` z `ResultAssert` dla testów; reguła architektury 15 (kod produkcyjny nie referuje pomocników testów) |
+| 1.5 | 2026-10-07 | Zespół Architektury SuperApp | Narzędzie deweloperskie `dotnet superapp` (ADR-0046): akceleracja deweloperska (`call` z automatycznym pobieraniem JWT, `env forward`/`dev`/`logs`, `outbox status`, `inbox status|list|clean`, `db query`), generator chartu parasolkowego `helm generate|values`; procedury diagnostyczne MSSQL w `deploy/sql/03-dev-diagnostics.sql` bez surowego SQL w kodzie C#; lokalne środowisko Kubernetes (`deploy/local/k8s`) obok docker compose (ADR-0034); weryfikacja kontraktów OpenAPI (`contracts snapshot` i `contracts diff`); poprawki diagramów Mermaid |
 
 ### Jak czytać ten dokument
 
@@ -580,7 +581,9 @@ sprawdza, że żadna trasa nie zawiera `internal` (ADR-0039).
 | `SuperApp.AnalyticsForwarder.Tests` | Pseudonim, walidacja opcji `Analytics`, flagi z konfiguracji, rejestracja bez `ICurrentUser`, mapowanie konsumentów na zdarzenia produktowe (test harness MassTransit) | 0036 |
 | `SuperApp.Analyzers.Tests`, `SuperApp.Gateway.Tests` | Testy reguł APP001–APP006; testy bramy na MSSQL (konfiguracja i walidacja tras, sesje bramy `bff-web`, odświeżanie tokenów między replikami, wylogowanie) | 0011, 0013, 0015, 0022 |
 | `Directory.Build.targets` | Opisy DTO z projektów Application w kontrakcie OpenAPI; etykieta wersji kontraktu `3.0.3` | 0019, 0033 |
-| `deploy/local` | Lokalne środowisko docker compose, realm Keycloak, bootstrap bazy | 0031, 0034 |
+| `deploy/local` | Lokalne środowisko docker compose oraz lokalny Kubernetes (`deploy/local/k8s`), realm Keycloak, bootstrap bazy | 0031, 0034 |
+| `deploy/sql` | Bootstrap schematów, ról, uprawnień i tras bramy oraz procedury diagnostyczne deweloperskie `deploy/sql/03-dev-diagnostics.sql` | 0021, 0046 |
+| `src/Tools/SuperApp.Cli` | Narzędzie CLI `dotnet superapp`: audyt spójności `doctor`, inspekcja `list`/`info`, rusztowanie `add`/`remove` dla serwisów, BFF, klientów, agregatów i usecase, migracje, kontrakty OpenAPI (`snapshot`, `diff`), zarządzanie chartem parasolkowym Helm, diagnostyka środowiska (`env`, `call`, `outbox`, `inbox`, `db query`) i scenariusz `e2e` (ADR-0046) | 0046 |
 | `src/Tools/SuperApp.Cli/Templates/superapp-service` | Szablon `dotnet new superapp-service` nowego serwisu | 0030 |
 | `src/Tools/SuperApp.Cli/Templates/superapp-bff` | Szablon `dotnet new superapp-bff -n {Experience} -o src/Bff`: host BFF bez bazy, dwa dokumenty OpenAPI (publiczny i wewnętrzny), polityka scope `{experience}.internal.read`, projekt testów z testem podziału kontraktów; klientów serwisów dodaje się po wygenerowaniu | 0038, 0039 |
 
@@ -608,7 +611,7 @@ analityki jest akceptowalne.
 ├─ global.json, Directory.Build.props, Directory.Packages.props
 ├─ docs/                       # dokument architektury, ADR
 ├─ src/
-│  ├─ Framework/               # SuperApp.Framework.Domain / .Application / .Infrastructure
+│  ├─ Framework/               # SuperApp.Framework.Domain / .Application / .Infrastructure / .Testing
 │  ├─ Bff/                     # {Experience}.Bff (+ testy): BFF experience, dziś Example.Bff (ADR-0038)
 │  ├─ Gateway/                 # SuperApp.Gateway: lokalny zamiennik wspólnej bramy brzegowej (ADR-0037)
 │  ├─ Analytics/               # SuperApp.AnalyticsForwarder (+ testy)
@@ -620,8 +623,8 @@ analityki jest akceptowalne.
 ├─ mobile/android, mobile/ios
 └─ deploy/
    ├─ helm/                    # superapp-service, superapp-bff, superapp-analytics-forwarder (etykiety experience), superapp-migrator; superapp-gateway tylko jako wzorzec lokalny
-   ├─ sql/                     # bootstrap schematów, ról i użytkowników
-   └─ local/                   # docker compose, realm Keycloak, bootstrap lokalnej bazy
+   ├─ sql/                     # bootstrap schematów, ról i użytkowników (01-bootstrap.sql, 02-gateway-config-permissions.sql, 03-dev-diagnostics.sql)
+   └─ local/                   # docker compose, k8s/ (lokalny Kubernetes), realm Keycloak, bootstrap lokalnej bazy
 ```
 
 ---
@@ -871,13 +874,13 @@ sequenceDiagram
     loop Co kilka sekund
         GW->>DB: Odczyt ostatniego MigrationId
     end
-    GW->>DB: Nowy MigrationId → odczyt konfiguracji
+    GW->>DB: Nowy MigrationId (odczyt konfiguracji)
     GW->>GW: Mapowanie i walidacja (adresy w klastrze, transformy, IConfigValidator)
     alt Konfiguracja poprawna
         GW->>GW: Podmiana konfiguracji (IChangeToken)
         GW->>L2: Zapis ostatniej poprawnej konfiguracji
     else Konfiguracja błędna
-        GW->>GW: Pozostaje poprzednia; log i licznik raz na wersję migracji
+        GW->>GW: Pozostaje poprzednia wersja (rejestracja w logu i liczniku)
     end
 ```
 
@@ -963,7 +966,7 @@ sequenceDiagram
     else analityka wyłączona (null)
         SPA->>SPA: Brak inicjalizacji PostHog
     end
-    Note over SPA: Wylogowanie: posthog.reset(); wycofanie zgody: wyłączenie zbierania i usunięcie lokalnego stanu SDK
+    Note over SPA: Wylogowanie: posthog.reset(), wycofanie zgody: wyłączenie zbierania i usunięcie lokalnego stanu SDK
 ```
 
 Przed zgodą SDK nie zapisuje niczego w przeglądarce. Proxy jest same-origin, więc analityka nie wymaga domeny zewnętrznej w CSP
@@ -1090,7 +1093,7 @@ sequenceDiagram
     participant B as Nasz BFF (API wewnętrzne)
     participant S as Nasz serwis domenowy
 
-    Note over O,B: NetworkPolicy: /internal tylko od BFF-ów innych experience; brama nie kieruje ruchu na /internal
+    Note over O,B: NetworkPolicy: /internal tylko od BFF-ów innych experience - brama nie kieruje ruchu na /internal
     O->>B: GET /internal/v1/widgets/sleep-summary (token użytkownika bez zmian)
     B->>B: Walidacja JWT, polityka scope example.internal.read (brak scope = 403 auth.missing_scope)
     B->>S: GET /v1/entries?from=…&to=… (ten sam token)
@@ -1116,7 +1119,7 @@ sequenceDiagram
 
 | Środowisko | Przeznaczenie | Migracje | Uwagi |
 |---|---|---|---|
-| lokalne | Praca deweloperska, testy end-to-end | `SuperApp.Migrator` (kontener lub IDE) | docker compose: infrastruktura + profil `app` z całą aplikacją (w tym `example-bff` na porcie 5120), lokalny Keycloak (ADR-0031, ADR-0034) |
+| lokalne | Praca deweloperska, testy end-to-end | `SuperApp.Migrator` (kontener lub IDE) | docker compose albo lokalny Kubernetes (`deploy/local/k8s`): infrastruktura + profil `app` z całą aplikacją (w tym `example-bff` na porcie 5120), lokalny Keycloak (ADR-0031, ADR-0034); wsparcie hybrydowej pracy przez `dotnet superapp env dev` oraz port-forward `dotnet superapp env forward` |
 | dev | Integracja zmian zespołu | Job `superapp-migrator` | Dane testowe |
 | test | Testy akceptacyjne, regresja | Job `superapp-migrator` | Konfiguracja zbliżona do prod |
 | prod | Produkcja | Skrypt idempotentny uruchamiany przez DBA | Brak konta DDL w klastrze |
@@ -1124,7 +1127,7 @@ sequenceDiagram
 Każde środowisko ma własną bazę MSSQL, instancję Redis, vhost RabbitMQ i konfigurację CIAM
 (ADR-0016) oraz osobny projekt PostHog Cloud EU (ADR-0036). Lokalnie analityka jest domyślnie wyłączona: puste
 `ANALYTICS_PROJECT_TOKEN` i `ANALYTICS_ID_KEY` w `deploy/local/.env`, forwarder tylko loguje zdarzenia, a flagi pochodzą z
-konfiguracji (ADR-0034).
+konfiguracji (ADR-0034). Do diagnostyki asynchronicznej i bazy lokalnie służą dedykowane procedury z `deploy/sql/03-dev-diagnostics.sql` wywoływane przez narzędzie CLI (`dotnet superapp outbox|inbox|db query`).
 
 ### 7.2 Obiekty Kubernetes
 
@@ -1214,7 +1217,7 @@ Zasada „ruch do domeny experience tylko przez jej BFF” nie wynika z tokenów
   wartością, z testem renderowanych manifestów w pipeline'ie.
 - **Kontrola:** przegląd zmian polityk, test renderowanych manifestów (gdy będą w chartach), alert na odrzucone połączenia
   (wymaganie wobec monitoringu).
-- **Lokalnie** docker compose nie odwzorowuje NetworkPolicy: izolacja experience nie jest tam egzekwowana (ADR-0034, ADR-0041).
+- **Lokalnie** docker compose nie odwzorowuje NetworkPolicy: izolacja experience nie jest tam egzekwowana (ADR-0034, ADR-0041). W lokalnym klastrze Kubernetes (`deploy/local/k8s`) manifesty polityk sieciowych mogą być weryfikowane zgodnie z etykietami `app.kubernetes.io/part-of` i rolami komponentów.
 
 ---
 
@@ -1378,7 +1381,7 @@ sprawdzić wcześniej dla UX. Nie trafiają do tokenu jako claimy, bo zmieniają
   Zmiana łamiąca API publicznego = nowe `/v{n+1}` (wersje modułu w sklepie żyją długo). API wewnętrzne zmienia się wyłącznie wstecznie
   zgodnie, a zmiana łamiąca oznacza nową wersję i uzgodniony termin wygaszenia starej. Oba dokumenty BFF są generowane przy buildzie
   z podziałem po ścieżce (`BffOpenApiDocuments`); test `ContractSplitTests` pilnuje, że kontrakt publiczny ma tylko ścieżki `/v…`, a
-  wewnętrzny tylko `/internal/v…`. Krok CI wykrywający zmiany łamiące jest nadal do zrobienia.
+  wewnętrzny tylko `/internal/v…`. Weryfikację zmian łamiących realizuje narzędzie `dotnet superapp contracts diff` (ADR-0046).
 - Fasada BFF używa typów wygenerowanych z kontraktu serwisu, więc zmiana kontraktu serwisu wymaga regeneracji klienta
   (`dotnet refitter --settings-file src/Bff/{Experience}.Bff/Clients/{Serwis}/{serwis}.refitter`) i przeglądu diffu kontraktu
   publicznego BFF. Schematy typów z klientów mają w kontrakcie BFF prefiks serwisu (`KnowledgeCategoryDto`), żeby nazwy różnych
@@ -1388,8 +1391,7 @@ sprawdzić wcześniej dla UX. Nie trafiają do tokenu jako claimy, bo zmieniają
   abstrakcyjne typy polimorficzne rozszerzenie `x-abstract: true` (`OpenApiAbstractTypeSchemaTransformer`). Zmiana nazwy kontrolera
   lub akcji zmienia `operationId`, czyli kontrakt.
 - Wersjonowanie w ścieżce (`/v1/...`) lub Asp.Versioning.
-- CI dostawcy wykrywa zmiany łamiące względem poprzedniej wersji kontraktu i blokuje merge (wymaga pipeline'u, którego w
-  repozytorium jeszcze nie ma).
+- CI dostawcy wykrywa zmiany łamiące względem poprzedniej wersji kontraktu (lub gałęzi docelowej przez `dotnet superapp contracts diff --git <rewizja>`) i blokuje merge.
 - Klienci generowani: Angular (`ng-openapi-gen` / `openapi-generator`), Android (`openapi-generator`),
   iOS (`swift-openapi-generator`), .NET (Refitter → Refit).
 - ID i jednowartościowe VO w kontrakcie jako typy proste (np. `string`/`uuid`).
@@ -1458,6 +1460,7 @@ sprawdzić wcześniej dla UX. Nie trafiają do tokenu jako claimy, bo zmieniają
   MassTransit 8 dodaje indeksy outboxa, a kolumnę `OutboxState.BusName` z wersji 9 pozostawia do osobnej migracji „contract”.
 - Użytkownicy bazy: `superapp_migrator` (tylko dev/test) oraz `{serwis}_app` per serwis i bramę,
   uprawnienia przez role per schemat; tworzone skryptem bootstrap.
+- Diagnostyka deweloperska i narzędzia pomocnicze (outbox, inbox, czyszczenie stanu idempotencji) na środowiskach lokalnych/dev opierają się na dedykowanych procedurach składowanych wdrożonych w `deploy/sql/03-dev-diagnostics.sql` (`dbo.sp_SuperApp_OutboxSummary`, `dbo.sp_SuperApp_InboxSummary`, `dbo.sp_SuperApp_InboxMessages`, `dbo.sp_SuperApp_CleanInbox`), co eliminuje surowy kod SQL z narzędzi deweloperskich C# (ADR-0021, ADR-0046).
 
 ### 8.11 Konfiguracja
 
@@ -1483,10 +1486,11 @@ sprawdzić wcześniej dla UX. Nie trafiają do tokenu jako claimy, bo zmieniają
 | Testy integracyjne | Migracje i schemat, repozytoria, handlery zapytań, zdarzenia do outboxa (publikacja przez fake), ograniczenia CHECK, mapowanie konfliktów unikalności, unieważnianie cache po commicie, widoczność dla czytelnika, brama (konfiguracja tras, sesje, odświeżanie tokenów, wylogowanie) | xUnit, Testcontainers (MSSQL) |
 | Testy forwardera | Pseudonim, walidacja opcji `Analytics`, flagi z konfiguracji, mapowanie zdarzeń integracyjnych na zdarzenia produktowe i listę dozwolonych właściwości | xUnit, test harness MassTransit (ADR-0036) |
 | Testy BFF | Podział kontraktów, przekazywanie odpowiedzi i tokenu, częściowe renderowanie, klienci downstream (`Example.Bff.Tests`, bez kontenerów) | xUnit |
-| Testy end-to-end | Logowanie, CSRF, odświeżanie i wylogowanie przez lokalną bramę (`bff-web`); przepływ biznesowy przez bramę (`/api/example/v1/...`), BFF, serwisy, outbox, RabbitMQ i Workera; brak trasy do `/internal` i do starych `/api/{serwis}/...`; API wewnętrzne BFF z tokenem `dev-cli` (200 ze scope `example.internal.read`, 403 bez); `analyticsId` z `/bff/user` i `/analytics/id`, proxy `/ingest` bez `Set-Cookie`, zdarzenia forwardera | Lokalne środowisko docker compose (ADR-0034) |
+| Testy end-to-end | Logowanie, CSRF, odświeżanie i wylogowanie przez lokalną bramę (`bff-web`); przepływ biznesowy przez bramę (`/api/example/v1/...`), BFF, serwisy, outbox, RabbitMQ i Workera; brak trasy do `/internal` i do starych `/api/{serwis}/...`; API wewnętrzne BFF z tokenem `dev-cli` (200 ze scope `example.internal.read`, 403 bez); `analyticsId` z `/bff/user` i `/analytics/id`, proxy `/ingest` bez `Set-Cookie`, zdarzenia forwardera | Lokalne środowisko docker compose lub Kubernetes (`dotnet superapp e2e`, ADR-0034, ADR-0046) |
 | Dokumentacja | Kompletność wymuszana przy kompilacji (CS1591, APP006); jakość treści w code review | ADR-0033 |
 | Testy architektury | Granice serwisów (z dopuszczeniem cudzych `Contracts`), zależności warstw, reguły ADR, forwarder tylko przez `Contracts`, SDK PostHog tylko we Frameworku i forwarderze; reguły BFF 12–14 (BFF nie referuje serwisów, także `Contracts`, ani innych BFF; bez `DbContext`; serwisy nie referują BFF, ADR-0038) | ArchUnitNET (ADR-0025, do ponownej oceny; ADR-0036) |
-| Testy kontraktów | Wykrywanie zmian łamiących OpenAPI | CI dostawcy |
+| Testy kontraktów | Wykrywanie zmian łamiących OpenAPI względem snapshotu lub gałęzi docelowej git | `dotnet superapp contracts diff` (ADR-0046) |
+| Spójność repozytorium | Spójność solucji (`.slnx`/`.sln`), rejestracja serwisów/BFF, wolne porty, EventId, wersja narzędzia, linki i ścieżki w dokumentacji | `dotnet superapp doctor`, `RepositoryDoctorTests` (ADR-0046) |
 
 ### 8.13 Zależności i licencje
 
@@ -1533,11 +1537,11 @@ Pełna lista i uzasadnienia: [`docs/adr/README.md`](adr/README.md).
 | Bramy i bezpieczeństwo | 0006 Bramy YARP · 0007 Zero trust · 0011 Własny BFF (profil bramy `bff-web`) · 0012 Audience i scope · 0013 Sesje i Data Protection · 0022 Konfiguracja tras w bazie · 0037 `SuperApp.Gateway` jako lokalny zamiennik wspólnej bramy brzegowej · 0040 Dostęp do API wewnętrznego i serwisów domenowych, przekazywanie tokenu użytkownika · 0041 NetworkPolicy jako gwarancja izolacji experience · 0042 Scope wywołań systemowych między serwisami |
 | Model experience | 0038 Experience: moduł, BFF i serwisy domenowe · 0039 API publiczne i wewnętrzne na poziomie BFF · 0045 Moduł w super appce: kontrakt z shellem (proponowany) |
 | Operacje | 0008 Logowanie i telemetria · 0016 Infrastruktura i CIAM zewnętrzne · 0018 Sondy · 0020 Cache |
-| Środowisko lokalne | 0031 Lokalny CIAM (Keycloak) · 0034 docker compose |
+| Środowisko lokalne | 0031 Lokalny CIAM (Keycloak) · 0034 docker compose (oraz lokalny Kubernetes `deploy/local/k8s`) |
 | Analityka produktowa | 0036 Analityka produktowa, session replay i feature flags w PostHog Cloud EU |
 | Licencje | 0035 MediatR i MassTransit w wersjach open source (zastępuje 0010) |
 | Serwisy domenowe | 0028 Knowledge (treść blokowa) · 0029 SleepDiary · 0030 Szablon serwisu |
-| Jakość | 0025 Testy architektury · 0046 Narzędzie deweloperskie `dotnet superapp` (spójność repozytorium) |
+| Jakość | 0025 Testy architektury · 0046 Narzędzie deweloperskie `dotnet superapp` (spójność repozytorium, scaffolding, diagnostyka) |
 
 ---
 
@@ -1689,3 +1693,5 @@ flowchart LR
 | Value object | Niezmienny obiekt bez tożsamości, porównywany po wartościach |
 | Zdarzenie domenowe | Wewnętrzny fakt w kontekście, obsługiwany w procesie w trakcie zapisu |
 | Zdarzenie integracyjne | Publiczny fakt publikowany do innych kontekstów przez RabbitMQ |
+| `dotnet superapp` | Narzędzie CLI repozytorium (`src/Tools/SuperApp.Cli`): weryfikacja spójności repozytorium (`doctor`), scaffolding serwisów/BFF/klientów/usecase, migracje, kontrakty OpenAPI, diagnostyka lokalna (`call`, `outbox`, `inbox`, `db query`) oraz scenariusz `e2e` (ADR-0046) |
+| Tryb hybrydowy (`env dev`) | Tryb pracy deweloperskiej: wyłączenie wybranego komponentu w klastrze/kontenerze i przekierowanie ruchu przez port-forward do instancji uruchomionej w lokalnym IDE |
