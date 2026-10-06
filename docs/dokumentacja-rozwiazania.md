@@ -530,11 +530,11 @@ wersji (`knowledge:material:v1:{id}`) podbijany przy zmianie kształtu DTO. Cach
 
 | Typ | Opis |
 |---|---|
-| `AnalyticsOptions` (sekcja `Analytics`) | `ProjectToken` (włącza analitykę), `Host` (`https://eu.i.posthog.com`), `AssetsHost` (`https://eu-assets.i.posthog.com`), `FeatureFlagsKey` (sekret, lokalna ewaluacja flag), `IdKey` (sekret HMAC, min. 32 znaki), `FeatureFlagsTimeout` (1 s). Walidacja przy starcie: hosty HTTPS w domenie `*.posthog.com` bez ścieżki, query i userinfo, żeby błąd konfiguracji nie zrobił z proxy bramy na dowolną stronę. |
+| `AnalyticsOptions` (sekcja `Analytics`) | `ProjectToken` (włącza analitykę), `Host` (`https://eu.i.posthog.com`), `AssetsHost` (`https://eu-assets.i.posthog.com`), `FeatureFlagsKey` (sekret, lokalna ewaluacja flag), `IdKey` (sekret HMAC, min. 32 znaki), `ForwarderUrl` (`http://analytics-forwarder:8080`), `FlagsRefreshInterval` (30 s), `FeatureFlagsTimeout` (1 s). Walidacja przy starcie: hosty HTTPS w domenie `*.posthog.com` bez ścieżki, query i userinfo, żeby błąd konfiguracji nie zrobił z proxy bramy na dowolną stronę. |
 | `AnalyticsIdentity` | `ForSubject(sub)` = `u_` + 32 znaki hex z HMAC-SHA256(`IdKey`, `sub`); `null` gdy analityka wyłączona. Ten sam pseudonim w `/bff/user`, `/analytics/id`, flagach i forwarderze. Zmiana `IdKey` dzieli historię użytkowników. |
 | `AddAppAnalytics` | Opcje z walidacją, `AnalyticsIdentity`, klient PostHog (tylko gdy włączona i poza buildem). |
-| `AddAppFeatureFlags` | `PostHogFeatureFlags` (włączona analityka) albo `ConfigurationFeatureFlags` (`FeatureFlags:{klucz}`, czytane przy każdym wywołaniu). |
-| `PostHogFeatureFlags` | Jedna ewaluacja na scope DI (spójność w żądaniu), z limitem `FeatureFlagsTimeout`, bez GeoIP. Błąd całej ewaluacji → wartości domyślne dla wszystkich flag scope'u (log 401); nieznana flaga → wartość domyślna (log 400); metryka `superapp.feature_flags.fallbacks`. |
+| `AddAppFeatureFlags` | `HybridCacheFeatureFlags` (włączona analityka) albo `ConfigurationFeatureFlags` (`FeatureFlags:{klucz}`, czytane przy każdym wywołaniu). |
+| `HybridCacheFeatureFlags` | Ewaluacja z dwupoziomową pamięcią podręczną `HybridCache` (L1 pamięć RAM procesu + L2 Redis, ADR-0020); przy braku wpisu w cache odpytuje wewnętrzny endpoint `/internal/flags` serwisu `analytics-forwarder`. Błąd pobrania → wartości domyślne flag (log 401); nieznana flaga → wartość domyślna (log 400); metryka `superapp.feature_flags.fallbacks`. |
 
 #### 4.3.8 API i błędy (ADR-0015, ADR-0044)
 
@@ -1009,12 +1009,12 @@ Kolejne migracje tras tworzy `dotnet superapp add|remove bff` (`Route{Nazwa}Expe
 
 ## 8. Forwarder analityki `SuperApp.AnalyticsForwarder`
 
-Proces bez bazy i bez domeny, który zamienia zdarzenia integracyjne serwisów na zdarzenia produktowe PostHog (ADR-0036). Serwisy nigdy
-nie rozmawiają z PostHog, więc awaria PostHog nie wpływa na ich działanie. Referuje wyłącznie `*.Contracts` serwisów (reguła 10).
-Port lokalny 5180.
+Proces bez bazy i bez domeny, który zamienia zdarzenia integracyjne serwisów na zdarzenia produktowe PostHog oraz stanowi jedyną bramę wyjściową (egress) dla analityki i feature flags w backendzie (ADR-0036). Serwisy nigdy nie rozmawiają bezpośrednio z PostHog, więc brak egressu w ich NetworkPolicy nie blokuje działania, a awaria PostHog nie wpływa na ich działanie. Referuje wyłącznie `*.Contracts` serwisów (reguła 10).
+Port lokalny 5180, w klastrze HTTP 8080 (`Service analytics-forwarder`).
 
 `Program.cs`: `AddAppServiceDefaults("analytics-forwarder")`, `AddAppWorker()`, `AddAppAnalytics`, `AddProductEventSink`,
-`AddAppEventSubscriber(…, "analytics", konsumenci)` (bez inboxa i outboxa; kolejki `analytics-*`), health.
+`AddAppEventSubscriber(…, "analytics", konsumenci)` (bez inboxa i outboxa; kolejki `analytics-*`), `FeatureFlagsCache`,
+`FeatureFlagsRefreshWorker` (odświeżanie flag co 30 s), endpoint `GET /internal/flags`, health.
 
 | Konsument | Zdarzenie wejściowe | Zdarzenie produktowe | Podmiot | Właściwości |
 |---|---|---|---|---|
@@ -1201,7 +1201,7 @@ zawierają NetworkPolicy: tworzy je dział infrastruktury na podstawie etykiet.
 |---|---|---|---|
 | `superapp-service` | Deployment `{serwis}-api` + Service + PDB (`minAvailable: 1`) + HPA (CPU 70%, 2–10); Deployment `{serwis}-worker` + PDB (`maxUnavailable: 1`) + KEDA `ScaledObject` (długość kolejek RabbitMQ) | `experience`, `service`, `secretName` (`ConnectionStrings__Write`, `__Read`, `__RabbitMq`, `__Redis`, opcjonalnie `Analytics__*`), `authentication.authority`; audience = `{serwis}-api` | `values-knowledge.yaml` (KEDA na `knowledge-material-archived`, `knowledge-collection-archived`), `values-sleepdiary.yaml` (KEDA wyłączona: brak konsumentów) |
 | `superapp-bff` | Deployment `{experience}-bff` + Service + PDB + HPA | `experience`, `secretName`, `authentication.authority`, `downstream` (mapa nazwa → adres, renderowana jako `Downstream__{Nazwa}__BaseAddress`); audience = `{experience}-bff` | `values-example.yaml` |
-| `superapp-analytics-forwarder` | Deployment `analytics-forwarder` + PDB + KEDA (kolejki `analytics-*`) | `experience`, `secretName` (`ConnectionStrings__RabbitMq`, `Analytics__ProjectToken`, `Analytics__IdKey`) | — |
+| `superapp-analytics-forwarder` | Deployment `analytics-forwarder` + Service + PDB + KEDA (kolejki `analytics-*`) | `experience`, `secretName` (`ConnectionStrings__RabbitMq`, `Analytics__ProjectToken`, `Analytics__IdKey`) | — |
 | `superapp-migrator` | Job `superapp-migrator`, hook ArgoCD `PreSync`, `BeforeHookCreation` | `enabled` (na prod `false`), `secretName` (`ConnectionStrings__Migrator`), `backoffLimit: 1`, `activeDeadlineSeconds: 1800` | — |
 | `superapp-gateway` | Deployment + Service + Ingress (TLS) + PDB + HPA, nazwa = profil | `profile`, `authentication.*`, `dataProtection.certificateSecretName` (bff-web), `ingress.host`, `ingress.tlsSecretName` | `values-bff-web.yaml`, `values-gateway-mobile.yaml`; **tylko lokalny zamiennik, nie część wydania** (ADR-0037) |
 
@@ -1502,7 +1502,7 @@ sprawdza tylko, czy token ma jakikolwiek scope serwisu tej experience.
 | 5000–5999 | SleepDiary | — |
 | 6000–6999 | `Example.Bff` | 6001 część odpowiedzi komponowanej inna niż `Ok` |
 | 7000–8999 | pula dla nowych serwisów i BFF-ów (po 1000) | — |
-| 9000–9999 | `SuperApp.AnalyticsForwarder` | 9001 analityka wyłączona, 9002 kolejka PostHog pełna |
+| 9000–9999 | `SuperApp.AnalyticsForwarder` | 9001 analityka wyłączona, 9002 kolejka PostHog pełna, 9005 odświeżono flagi, 9006 błąd odświeżania flag |
 
 ### 14.9 Metryki i ślady
 
@@ -1510,7 +1510,7 @@ sprawdza tylko, czy token ma jakikolwiek scope serwisu tej experience.
 |---|---|---|
 | `superapp.cache.requests` (`result`) | counter | `FailSafeCache` |
 | `superapp.cache.fail_safe.activations` | counter | `FailSafeCache` (zalecany alert) |
-| `superapp.feature_flags.fallbacks` (`reason`) | counter | `PostHogFeatureFlags` |
+| `superapp.feature_flags.fallbacks` (`reason`) | counter | `HybridCacheFeatureFlags` |
 | `superapp.gateway.proxy_config.loaded` (`profile`, `migration_id`) | gauge | brama |
 | `superapp.gateway.proxy_config.reload_failures` | counter | brama (zalecany alert) |
 | standardowe ASP.NET Core, HttpClient, runtime, MassTransit | | OpenTelemetry |

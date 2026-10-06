@@ -499,7 +499,7 @@ Kod techniczny wspólny dla wszystkich serwisów, **bez pojęć biznesowych**.
 |---|---|
 | `SuperApp.Framework.Domain` | `Aggregates` (`AggregateRoot` z `Raise`, `Entity`, `IAggregateRoot`) · `Events` (`IDomainEvent`) · `Results` (`Result` z `Error?`, `Result<T>` z `TryGetValue`, bez `Value`; `Error`, `ErrorType`) · `ValueObjects` (`ISingleValueObject<TSelf,TValue>`, `IStronglyTypedId<TSelf,TValue>`) |
 | `SuperApp.Framework.Application` | `Messaging` (`ICommand`, `IQuery`, handlery) · `Behaviors` (logowanie, autoryzacja, walidacja, transakcja) · `Events` (`IDomainEventHandler<T>`, `IDomainEventDispatcher`, `IIntegrationEventPublisher`) · `Persistence` (`IUnitOfWork` z `OnCommitted`) · `Security` (`ICurrentUser`, `RequiresScope`, `AuthorizationErrors`) · `FeatureFlags` (`FeatureFlag(Key, DefaultValue)`, port `IFeatureFlags.IsEnabledAsync`) · `Pagination` · `Time` (`IClock`) · `Telemetry` |
-| `SuperApp.Framework.Infrastructure` | `Persistence` (`WriteDbContextBase`: Unit of Work, dispatch zdarzeń, mapowanie naruszeń unikalnych indeksów na `Conflict`, interceptor akcji po commicie; `ReadDbContextBase`; `Conventions` dla ID i VO) · `Events` (dispatcher) · `Messaging` (MassTransit, outbox/inbox; `AddAppEventSubscriber` dla subskrybenta bez bazy) · `Caching` (`FailSafeCache`) · `Analytics` (`AnalyticsOptions`, `AnalyticsIdentity`, `PostHogFeatureFlags`, `ConfigurationFeatureFlags`, `AddAppAnalytics`, `AddAppFeatureFlags`) · `Hosting` (także `AddAppServiceDefaults` bez bazy), `HealthChecks`, `Telemetry` · `Api` (`Result` → HTTP; `ProblemDetailsConventions`: `code` i `traceId` w każdej odpowiedzi błędu, ADR-0044) · `OpenApi` (OpenAPI 3.0, schematy ID/VO, `code`/`traceId` w `ProblemDetails`) · `Http/Downstream` (`AddDownstreamApi<T>`: klient Refit z adresem `Downstream:{nazwa}:BaseAddress`, standardowa odporność z ponowieniami tylko metod bezpiecznych (GET, HEAD, OPTIONS), daty ISO 8601 w ścieżce i zapytaniu) · `Http/UserContext` (`AddUserTokenForwarding`, port `IDownstreamTokenProvider` jako furtka token exchange, ADR-0040) · `Http/ClientCredentials` (`AddClientCredentialsToken` dla wywołań systemowych) · `Api` także `DownstreamResponseExtensions.ToActionResult` i `DownstreamUnavailableExceptionHandler` (`503`/`504`) · `Security` (`ScopePolicyExtensions.RequireScope` dla hostów bez MediatR, `ScopeAuthorizationResultHandler`: odmowa polityki jako `403 auth.missing_scope`; `InternalApiCallAudit`: audyt wejść do API wewnętrznego BFF, EventId 230) · `Json` (`PolymorphicDiscriminatorProperty`) · `OpenApi` także `operationId` = `{Controller}_{Action}`, `securitySchemes` Bearer, `x-abstract` · `Time` · `ValueObjects` (JSON) |
+| `SuperApp.Framework.Infrastructure` | `Persistence` (`WriteDbContextBase`: Unit of Work, dispatch zdarzeń, mapowanie naruszeń unikalnych indeksów na `Conflict`, interceptor akcji po commicie; `ReadDbContextBase`; `Conventions` dla ID i VO) · `Events` (dispatcher) · `Messaging` (MassTransit, outbox/inbox; `AddAppEventSubscriber` dla subskrybenta bez bazy) · `Caching` (`FailSafeCache`) · `Analytics` (`AnalyticsOptions`, `AnalyticsIdentity`, `HybridCacheFeatureFlags`, `ConfigurationFeatureFlags`, `AddAppAnalytics`, `AddAppFeatureFlags`) · `Hosting` (także `AddAppServiceDefaults` bez bazy), `HealthChecks`, `Telemetry` · `Api` (`Result` → HTTP; `ProblemDetailsConventions`: `code` i `traceId` w każdej odpowiedzi błędu, ADR-0044) · `OpenApi` (OpenAPI 3.0, schematy ID/VO, `code`/`traceId` w `ProblemDetails`) · `Http/Downstream` (`AddDownstreamApi<T>`: klient Refit z adresem `Downstream:{nazwa}:BaseAddress`, standardowa odporność z ponowieniami tylko metod bezpiecznych (GET, HEAD, OPTIONS), daty ISO 8601 w ścieżce i zapytaniu) · `Http/UserContext` (`AddUserTokenForwarding`, port `IDownstreamTokenProvider` jako furtka token exchange, ADR-0040) · `Http/ClientCredentials` (`AddClientCredentialsToken` dla wywołań systemowych) · `Api` także `DownstreamResponseExtensions.ToActionResult` i `DownstreamUnavailableExceptionHandler` (`503`/`504`) · `Security` (`ScopePolicyExtensions.RequireScope` dla hostów bez MediatR, `ScopeAuthorizationResultHandler`: odmowa polityki jako `403 auth.missing_scope`; `InternalApiCallAudit`: audyt wejść do API wewnętrznego BFF, EventId 230) · `Json` (`PolymorphicDiscriminatorProperty`) · `OpenApi` także `operationId` = `{Controller}_{Action}`, `securitySchemes` Bearer, `x-abstract` · `Time` · `ValueObjects` (JSON) |
 | `SuperApp.Framework.Testing` | `ResultAssert` (`Success`, `Failure`) i `ResultAssertionException`: rozpakowanie wyniku w testach; referowany wyłącznie przez projekty testów (ADR-0047, reguła architektury 15) |
 
 Każdy publiczny typ Frameworku ma pełną dokumentację XML z częścią odpowiedzi `remarks` i przykładami z repozytorium; służy jako wzorzec
@@ -513,8 +513,10 @@ Analityka we Frameworku (ADR-0036):
   Implementacja wymaga `ICurrentUser`, bo flagi są liczone dla pseudonimu bieżącego użytkownika.
 - `AnalyticsIdentity.ForSubject(sub)` zwraca `u_` + 32 znaki hex z HMAC-SHA256(`Analytics:IdKey`, `sub`) albo `null`, gdy analityka
   jest wyłączona lub nie ma użytkownika; zdarzenia i flagi bez użytkownika używają identyfikatora `system`.
-- `PostHogFeatureFlags` (zakres DI) wykonuje jedno zapytanie o flagi na żądanie lub wiadomość, z limitem czasu
-  `Analytics:FeatureFlagsTimeout`; przy braku odpowiedzi lub nieznanej fladze zwraca wartość domyślną z kodu (EventId 400–401,
+- `HybridCacheFeatureFlags` (zakres DI) czyta ewaluacje z `HybridCache` (L1 pamięć procesu + L2 Redis, ADR-0020); przy braku
+  wpisu w cache odpytuje wewnętrzny serwis `analytics-forwarder` (`/internal/flags`). `AnalyticsForwarder` cyklicznie odświeża snapshot
+  flag w tle z PostHog Cloud EU (EventId 9005/9006). Serwisy domenowe nie wykonują żadnego bezpośredniego ruchu wychodzącego (egress)
+  do PostHog. Przy braku odpowiedzi lub nieznanej fladze zwraca wartość domyślną z kodu (EventId 400–401,
   metryka `superapp.feature_flags.fallbacks`). Bez analityki działa `ConfigurationFeatureFlags` (`FeatureFlags:{klucz}`).
 
 Typy w każdym projekcie leżą w katalogach według tego, czego dotyczą (np. `SuperApp.Framework.Domain.Results`,
@@ -1003,30 +1005,40 @@ powtórzenie zdarzenia analitycznego jest akceptowane (ADR-0036).
 sequenceDiagram
     autonumber
     participant H as Handler (Application)
-    participant FF as IFeatureFlags (PostHogFeatureFlags, zakres DI)
-    participant CU as ICurrentUser
+    participant FF as IFeatureFlags (HybridCacheFeatureFlags)
+    participant HC as HybridCache (L1 Memory / L2 Redis)
+    participant AF as AnalyticsForwarder (/internal/flags)
     participant PH as PostHog Cloud EU
 
+    Note over AF,PH: Worker cyklicznie odświeża flagi systemowe (co 30s)
+    AF->>PH: EvaluateFlagsAsync (AnalyticsIdentity.System)
+    PH-->>AF: Snapshot flag bazowych (EventId 9005)
+
     H->>FF: IsEnabledAsync(KnowledgeFeatureFlags.X, ct)
-    alt Pierwsze pytanie w zakresie
-        FF->>CU: Subject → pseudonim (bez użytkownika: system)
-        FF->>PH: Jedno zapytanie o wszystkie flagi (limit Analytics:FeatureFlagsTimeout)
-        alt Odpowiedź w limicie czasu
-            PH-->>FF: Wartości flag
-        else Timeout / brak odpowiedzi
-            FF->>FF: Ostrzeżenie (EventId 401), metryka superapp.feature_flags.fallbacks
+    FF->>HC: GetOrCreateAsync(superapp:featureflags:{distinctId})
+    alt Trafienie w cache (L1 w pamięci lub L2 w Redis)
+        HC-->>FF: Ewaluacje flag
+    else Cache miss (lub wygaśnięcie wpisu)
+        HC->>AF: GET /internal/flags?distinctId={id}
+        alt Użytkownik i ewaluacja per-user w forwarderze
+            AF->>PH: Ewaluacja flag użytkownika (jeśli brak w cache forwardera)
+            PH-->>AF: Wynik ewaluacji
         end
+        AF-->>HC: Słownik flag (lub fallback bazowy)
+        HC-->>FF: Słownik flag
     end
     alt Flaga znana
-        FF-->>H: Wartość z PostHog (ta sama do końca zakresu)
+        FF-->>H: Wartość flagi
     else Flaga nieznana lub brak odpowiedzi
-        FF-->>H: Wartość domyślna z kodu (nieznana: EventId 400)
+        FF-->>H: Wartość domyślna z kodu (EventId 400/401)
     end
 ```
 
-Flaga nigdy nie psuje żądania: wartość domyślna z kodu musi być bezpieczna do trwałego działania. Z kluczem
-`Analytics:FeatureFlagsKey` ewaluacja odbywa się lokalnie w procesie. Bez analityki (lokalnie, w testach) wartości pochodzą z
-konfiguracji `FeatureFlags:{klucz}`. Flaga nie jest uprawnieniem: o dostępie decydują scope i reguły zasobu (ADR-0012, ADR-0036).
+Flaga nigdy nie psuje żądania: wartość domyślna z kodu musi być bezpieczna do trwałego działania. Ewaluacja w mikroserwisach
+opiera się na HybridCache (L1 in-memory + L2 Redis, ADR-0020), a zapytania wychodzące do PostHog Cloud EU wykonuje
+wyłącznie `SuperApp.AnalyticsForwarder` (brak bezpośredniego egressu z serwisów domenowych). Bez analityki (lokalnie,
+w testach) wartości pochodzą z konfiguracji `FeatureFlags:{klucz}`. Flaga nie jest uprawnieniem: o dostępie decydują scope i
+reguły zasobu (ADR-0012, ADR-0036).
 
 ### 6.14 Moduł → brama → BFF → serwisy (endpoint komponowany)
 
@@ -1146,16 +1158,17 @@ Porty są wartościami domyślnymi, do potwierdzenia z działem infrastruktury.
 | BFF-y innych experience | {experience}-bff, API wewnętrzne `/internal` | HTTP 8080 | API wewnętrzne dla innych experience (ADR-0039, ADR-0041) |
 | {experience}-bff, serwisy tej samej experience | {serwis}-api | HTTP 8080 | Jedyne dopuszczone wejście do serwisów domenowych (NetworkPolicy, ADR-0041) |
 | Bramy, serwisy, Migrator | MSSQL | TDS 1433 | Dane |
-| Bramy, serwisy | Redis | TLS 6380 | Cache L2 |
+| Bramy, serwisy | Redis | TLS 6380 | Cache L2 (w tym feature flags w HybridCache) |
 | Serwisy (api, worker), analytics-forwarder | RabbitMQ | AMQPS 5671 | Zdarzenia integracyjne |
 | Bramy, BFF, serwisy | CIAM | HTTPS 443 | OIDC, JWKS, tokeny |
+| Serwisy (api, worker) | analytics-forwarder | HTTP 8080 | Pobieranie snapshotu flag (`/internal/flags`, tylko przy cache miss) |
 | bff-web | `eu.i.posthog.com`, `eu-assets.i.posthog.com` (egress z klastra) | HTTPS 443 | Proxy `/ingest` analityki web (ADR-0036) |
-| analytics-forwarder | `eu.i.posthog.com` (egress z klastra) | HTTPS 443 | Zdarzenia produktowe z backendu |
-| Serwisy (api, worker) | `eu.i.posthog.com` (egress z klastra) | HTTPS 443 | Ewaluacja feature flags (gdy analityka włączona) |
+| analytics-forwarder | `eu.i.posthog.com` (egress z klastra) | HTTPS 443 | Zdarzenia produktowe i odświeżanie flag w PostHog Cloud EU (ADR-0036) |
 | Wszystkie pody | OTel Collector | OTLP 4317 | Telemetria |
 
-Wyjście do PostHog realizuje dział infrastruktury (NetworkPolicy egress lub proxy wychodzące, ADR-0016); aplikacje mobilne łączą się
-z PostHog bezpośrednio z urządzeń, poza klastrem.
+Wyjście do PostHog realizuje dział infrastruktury (NetworkPolicy egress lub proxy wychodzące, ADR-0016) wyłącznie dla `analytics-forwarder`
+i `bff-web`; serwisy domenowe nie mają uprawnień egressu do PostHog (komunikują się wyłącznie wewnętrznie z `analytics-forwarder`
+i Redisem). Aplikacje mobilne łączą się z PostHog bezpośrednio z urządzeń, poza klastrem.
 
 ### 7.4 Podział odpowiedzialności
 

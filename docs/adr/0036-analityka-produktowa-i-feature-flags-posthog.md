@@ -85,16 +85,22 @@ Właściciel projektu wybrał PostHog Cloud w regionie EU (SaaS).
 
 - **Port `IFeatureFlags`** (`SuperApp.Framework.Application`) z flagami deklarowanymi w kodzie jako `FeatureFlag(Key, DefaultValue)` w klasie
   `{Serwis}FeatureFlags` obok `{Serwis}Scopes`. Klucz ma prefiks serwisu, np. `knowledge_material_ratings`.
-- **Implementacja na PostHog** (`SuperApp.Framework.Infrastructure`, rejestrowana przez `AddAppFeatureFlags`):
-  - flagi są liczone dla pseudonimu bieżącego użytkownika (bez użytkownika: `system`), jednym zapytaniem na żądanie lub wiadomość;
-  - wartości są spójne w obrębie zakresu DI;
-  - czas oczekiwania jest ograniczony (`Analytics:FeatureFlagsTimeout`, domyślnie 1 s);
-  - z kluczem `Analytics:FeatureFlagsKey` (Vault) ewaluacja odbywa się lokalnie w procesie.
-- **Flaga nigdy nie psuje żądania.** Brak odpowiedzi, przekroczenie czasu lub nieznana flaga oznacza wartość domyślną z kodu, ostrzeżenie
-  w logu (EventId 400–401) i wzrost metryki `superapp.feature_flags.fallbacks`. Wartość domyślna ma być bezpieczna do trwałego działania.
-- **Bez analityki** (lokalnie, w testach) flagi pochodzą z konfiguracji `FeatureFlags:{klucz}` z wartością domyślną jako fallback.
+- **Architektura ewaluacji i izolacja egressu (Wariant A-2, HybridCache):**
+  - **Brak bezpośredniego egressu z mikroserwisów domenowych:** mikroserwisy nie komunikują się bezpośrednio z PostHog Cloud EU,
+    co eliminuje konieczność otwierania ruchu wychodzącego do Internetu w NetworkPolicy i zapobiega łamaniu reguł izolacji sieciowej.
+  - **Dedykowany gateway wychodzący (`SuperApp.AnalyticsForwarder`):** forwarder jest jedynym procesem backendowym z ruchem
+    egress do PostHog Cloud EU (HTTPS 443). W tle działa `FeatureFlagsRefreshWorker` (`PeriodicTimer`, domyślnie co 30 s), który
+    odświeża snapshot flag systemowych (EventId 9005/9006) i wystawia wewnętrzny endpoint HTTP `GET /internal/flags?distinctId={id}` (port 8080).
+  - **Dwupoziomowy cache `HybridCache` (ADR-0020):** w mikroserwisach `IFeatureFlags` jest realizowany przez `HybridCacheFeatureFlags`.
+    Ewaluacja korzysta z klucza `superapp:featureflags:{distinctId}` z pamięcią L1 (w procesie, TTL 30 s) oraz L2 (Redis, TTL 5 min).
+    Dzięki temu 99%+ odczytów flag ma zerowy narzut sieciowy (odczyt z pamięci RAM instancji mikroserwisu), a odpytanie forwardera
+    następuje wyłącznie przy wygaśnięciu cache.
+- **Flaga nigdy nie psuje żądania.** Brak odpowiedzi forwardera, błąd sieci, błąd cache lub nieznana flaga natychmiast zwraca
+  wartość domyślną z kodu (`FeatureFlag.DefaultValue`), generując ostrzeżenie w logu (EventId 400–401) i inkrementując metrykę
+  `superapp.feature_flags.fallbacks`. Wartość domyślna musi być bezpieczna do trwałego działania.
+- **Bez analityki** (lokalnie, w testach) flagi pochodzą z konfiguracji `FeatureFlags:{klucz}` (`ConfigurationFeatureFlags`) z wartością domyślną jako fallback.
 - **Flaga to nie uprawnienie.** O dostępie decydują scope i reguły zasobu (ADR-0012). Zachowanie serwera zależne od flagi jest
-  sprawdzane w backendzie, a flaga w UI służy tylko wyglądowi.
+  sprawdzane w backendzie, a flaga w UI służy tylko celom wizualnym.
 
 ### Konfiguracja i egzekwowanie
 
@@ -102,6 +108,8 @@ Właściciel projektu wybrał PostHog Cloud w regionie EU (SaaS).
   - `ProjectToken` – włącza analitykę; jawny, ale ustawiany per środowisko;
   - `IdKey` – sekret;
   - `FeatureFlagsKey` – sekret, opcjonalny;
+  - `ForwarderUrl` – adres wewnętrznego serwisu forwardera (domyślnie `http://analytics-forwarder:8080`);
+  - `FlagsRefreshInterval` – cykliczny interwał odświeżania flag w forwarderze (domyślnie `00:00:30`);
   - `Host`, `AssetsHost` – tylko `https://*.posthog.com`;
   - `FeatureFlagsTimeout`.
 - **Walidacja przy starcie.** Gdy analityka jest włączona, brak `IdKey` lub host spoza `posthog.com` zatrzymuje proces. Bez

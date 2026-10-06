@@ -4,6 +4,7 @@ using SuperApp.Framework.Infrastructure.OpenApi;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using PostHog;
 using PostHog.Config;
 
@@ -64,7 +65,7 @@ public static class AnalyticsServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers <see cref="IFeatureFlags"/> for handlers: <see cref="PostHogFeatureFlags"/> (scoped) when analytics is enabled,
+    /// Registers <see cref="IFeatureFlags"/> for handlers: <see cref="HybridCacheFeatureFlags"/> (scoped) when analytics is enabled,
     /// <see cref="ConfigurationFeatureFlags"/> otherwise; also calls <see cref="AddAppAnalytics"/>.
     /// </summary>
     /// <remarks>
@@ -82,7 +83,14 @@ public static class AnalyticsServiceCollectionExtensions
 
         if (Settings(configuration).Enabled && !BuildTimeDocumentGeneration.IsActive)
         {
-            services.TryAddScoped<IFeatureFlags, PostHogFeatureFlags>();
+            services.AddHybridCache();
+            services.AddHttpClient("AnalyticsForwarder", (serviceProvider, client) =>
+            {
+                var options = serviceProvider.GetRequiredService<IOptions<AnalyticsOptions>>().Value;
+                client.BaseAddress = options.ForwarderUrl;
+                client.Timeout = options.FeatureFlagsTimeout;
+            });
+            services.TryAddScoped<IFeatureFlags, HybridCacheFeatureFlags>();
         }
         else
         {

@@ -93,7 +93,7 @@ flowchart LR
 | Element | Gdzie w repozytorium | Rola |
 |---|---|---|
 | `FeatureFlag`, `IFeatureFlags` | `src/Framework/SuperApp.Framework.Application/FeatureFlags/` | port flag dla handlerów; Application nie zna PostHog |
-| `AnalyticsOptions`, `AnalyticsIdentity`, `PostHogFeatureFlags`, `ConfigurationFeatureFlags`, `AnalyticsServiceCollectionExtensions` | `src/Framework/SuperApp.Framework.Infrastructure/Analytics/` | ustawienia i ich walidacja, pseudonim, implementacje flag, rejestracja |
+| `AnalyticsOptions`, `AnalyticsIdentity`, `HybridCacheFeatureFlags`, `ConfigurationFeatureFlags`, `AnalyticsServiceCollectionExtensions` | `src/Framework/SuperApp.Framework.Infrastructure/Analytics/` | ustawienia i ich walidacja, pseudonim, implementacje flag, rejestracja |
 | `InfrastructureTelemetry.FeatureFlagFallbacks` | `src/Framework/SuperApp.Framework.Infrastructure/Telemetry/InfrastructureTelemetry.cs` | metryka `superapp.feature_flags.fallbacks` |
 | `AddAppEventSubscriber` | `src/Framework/SuperApp.Framework.Infrastructure/Messaging/SubscriberMessagingServiceCollectionExtensions.cs` | MassTransit dla subskrybenta bez bazy (forwarder) |
 | `AnalyticsEndpoints` | `src/Gateway/SuperApp.Gateway/Analytics/AnalyticsEndpoints.cs` | proxy `/ingest` (bff-web), `GET /analytics/id` (gateway-mobile) |
@@ -763,99 +763,84 @@ var detailedCompletion = await flags.IsEnabledAsync(KnowledgeFeatureFlags.Detail
 var result = material.Complete(userId, detailedCompletion, clock.UtcNow);
 ```
 
-### Implementacja na PostHog: `PostHogFeatureFlags`
+### Implementacja na PostHog i HybridCache: `HybridCacheFeatureFlags`
+
+Zgodnie z architekturą (ADR-0036) serwisy domenowe **nie wykonują bezpośrednich zapytań do PostHog Cloud EU**, co chroni izolację sieciową w klastrze (brak konieczności otwierania ruchu wychodzącego `egress` do Internetu w NetworkPolicy).
+Zamiast tego ewaluacja flag opiera się na bibliotece **`HybridCache`** (L1 w pamięci RAM + L2 w Redis, ADR-0020) oraz na dedykowanym serwisie wewnętrznym **`SuperApp.AnalyticsForwarder`**, który pełni rolę jedynej bramy wychodzącej do PostHog:
 
 ```csharp
-// src/Framework/SuperApp.Framework.Infrastructure/Analytics/PostHogFeatureFlags.cs
-internal sealed partial class PostHogFeatureFlags(
-    IPostHogClient client,
+// src/Framework/SuperApp.Framework.Infrastructure/Analytics/HybridCacheFeatureFlags.cs
+internal sealed partial class HybridCacheFeatureFlags(
+    HybridCache cache,
+    IHttpClientFactory httpClientFactory,
     ICurrentUser currentUser,
     AnalyticsIdentity identity,
     IOptions<AnalyticsOptions> options,
-    ILogger<PostHogFeatureFlags> logger) : IFeatureFlags
+    ILogger<HybridCacheFeatureFlags> logger) : IFeatureFlags
 {
-    private Task<FeatureFlagEvaluations?>? _evaluations;
+    private const string ForwarderClientName = "AnalyticsForwarder";
 
-    public async ValueTask<bool> IsEnabledAsync(FeatureFlag flag, CancellationToken cancellationToken)
-    {
-        // One request to PostHog per scope evaluates all flags; later calls in the scope reuse the snapshot.
-        _evaluations ??= EvaluateAsync(cancellationToken);
-        var evaluations = await _evaluations;
-        if (evaluations is null)
-        {
-            return flag.DefaultValue;
-        }
-
-        if (!evaluations.Keys.Contains(flag.Key))
-        {
-            Fallback(flag, "unknown flag", exception: null);
-            return flag.DefaultValue;
-        }
-
-        return evaluations.IsEnabled(flag.Key);
-    }
-
-    private async Task<FeatureFlagEvaluations?> EvaluateAsync(CancellationToken cancellationToken)
+    public async ValueTask<bool> IsEnabledAsync(FeatureFlag flag, CancellationToken cancellationToken = default)
     {
         var distinctId = identity.ForSubject(currentUser.Subject) ?? AnalyticsIdentity.System;
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(options.Value.FeatureFlagsTimeout);
+        var cacheKey = $"superapp:featureflags:{distinctId}";
+
+        IReadOnlyDictionary<string, bool>? evaluations = null;
 
         try
         {
-            return await client.EvaluateFlagsAsync(distinctId, new AllFeatureFlagsOptions { DisableGeoIp = true }, timeout.Token);
+            evaluations = await cache.GetOrCreateAsync(
+                cacheKey,
+                async cancel => await FetchFlagsAsync(distinctId, cancel),
+                new HybridCacheEntryOptions
+                {
+                    LocalCacheExpiration = TimeSpan.FromSeconds(30),
+                    Expiration = TimeSpan.FromMinutes(5),
+                },
+                cancellationToken: cancellationToken);
         }
-        // Any failure of the flag provider (timeout, network, an unexpected response the SDK does not handle) falls back to the defaults:
-        // a flag must never fail the request. Only cancellation requested by the caller propagates.
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            InfrastructureTelemetry.FeatureFlagFallbacks.Add(1, new KeyValuePair<string, object?>("reason", exception is OperationCanceledException ? "timeout" : "unavailable"));
+            InfrastructureTelemetry.FeatureFlagFallbacks.Add(1, new KeyValuePair<string, object?>("reason", "cache_error"));
             LogEvaluationFailed(logger, exception);
-            return null;
         }
+
+        if (evaluations is null || !evaluations.TryGetValue(flag.Key, out var isEnabled))
+        {
+            Fallback(flag, "unknown flag or fallback", exception: null);
+            return flag.DefaultValue;
+        }
+
+        return isEnabled;
     }
-
-    private void Fallback(FeatureFlag flag, string reason, Exception? exception)
-    {
-        InfrastructureTelemetry.FeatureFlagFallbacks.Add(1, new KeyValuePair<string, object?>("reason", reason));
-        LogFallback(logger, flag.Key, reason, flag.DefaultValue, exception);
-    }
-
-    [LoggerMessage(401, LogLevel.Warning, "Feature flags could not be evaluated; every flag of this request uses its default value")]
-    private static partial void LogEvaluationFailed(ILogger logger, Exception exception);
-
-    [LoggerMessage(400, LogLevel.Warning, "Feature flag {FlagKey}: {Reason}, using the default value {DefaultValue}")]
-    private static partial void LogFallback(ILogger logger, string flagKey, string reason, bool defaultValue, Exception? exception);
-}
+...
 ```
 
 Krok po kroku, co się dzieje w żądaniu:
 
 ```mermaid
 flowchart TD
-    A["handler: IsEnabledAsync(flag)"] --> B{"pierwsze wywołanie<br/>w tym zakresie DI?"}
-    B -- "tak" --> C["distinct id = pseudonim ICurrentUser.Subject<br/>albo 'system'"]
-    C --> D["EvaluateFlagsAsync: wszystkie flagi naraz,<br/>DisableGeoIp, limit FeatureFlagsTimeout (1 s)"]
-    B -- "nie" --> E["ten sam wynik (Task) z pamięci zakresu"]
-    D -- "sukces" --> E
-    D -- "timeout / dowolny błąd PostHog<br/>(żądanie nieanulowane)" --> F["log 401 (raz na zakres)<br/>superapp.feature_flags.fallbacks{reason=timeout|unavailable} + 1<br/>wynik = null"]
-    D -- "anulowanie przez wywołującego" --> X["OperationCanceledException leci dalej"]
-    E --> G{"flaga znana PostHog?"}
-    G -- "tak" --> H["wartość z PostHog"]
-    G -- "nie" --> I["DefaultValue<br/>log 400, reason = unknown flag"]
-    F --> J["każda flaga zakresu: DefaultValue"]
+    A["handler: IsEnabledAsync(flag)"] --> B["distinct id = pseudonim ICurrentUser.Subject<br/>albo 'system'"]
+    B --> C["HybridCache.GetOrCreateAsync<br/>(klucz superapp:featureflags:{id})"]
+    C -- "trafienie L1 (RAM) lub L2 (Redis)" --> D["zwrócenie słownika flag z cache"]
+    C -- "cache miss (brak lub wygaśnięcie)" --> E["GET /internal/flags?distinctId={id}<br/>do analytics-forwarder"]
+    E -- "sukces HTTP" --> F["zapis do L1 (30 s) i L2 (5 min)"]
+    F --> D
+    E -- "błąd / timeout / niedostępność forwardera" --> G["log 401, superapp.feature_flags.fallbacks<br/>wynik = pusty słownik"]
+    G --> H["DefaultValue z kodu"]
+    D --> I{"flaga znana w słowniku?"}
+    I -- "tak" --> J["wartość flagi (true / false)"]
+    I -- "nie" --> K["DefaultValue<br/>log 400, reason = unknown flag"]
 ```
 
 | Cecha | Zachowanie | Konsekwencja dla Ciebie |
 |---|---|---|
-| zakres DI | `PostHogFeatureFlags` jest **scoped**: jedna instancja na żądanie HTTP albo konsumowaną wiadomość | wszystkie odczyty w żądaniu (handler, kilka miejsc, behaviors) widzą te same wartości, nawet jeśli ktoś w tym czasie zmieni flagę w panelu |
-| jedno zapytanie | pierwsze `IsEnabledAsync` w zakresie pobiera **wszystkie** flagi użytkownika; kolejne nie idą do sieci | nie cache'uj wartości flag samodzielnie |
-| dla kogo | pseudonim `ICurrentUser.Subject`; bez użytkownika (`SystemCurrentUser` w Workerze, endpoint anonimowy) `system` | rollout procentowy jest „przyklejony” do osoby i zgodny z tym, co widzi SPA; w Workerze flaga ma **jedną** wartość dla wszystkich wiadomości (celuj w `system` warunkiem w PostHog albo rolluj 0 % / 100 %) |
-| timeout | `Analytics:FeatureFlagsTimeout`, domyślnie 1 s | w handlerze komendy transakcja jest już otwarta (`TransactionBehavior`), więc wolne PostHog wydłuża transakcję maksymalnie o ten czas |
-| lokalna ewaluacja | z `Analytics:FeatureFlagsKey` (`phs_…`, Vault) klient PostHog pobiera definicje flag okresowo i liczy je w pamięci procesu | bez klucza każde pierwsze wywołanie w zakresie to żądanie HTTP do PostHog; na prod ustaw klucz |
-| fallback | timeout lub inny błąd PostHog (sieć, nieobsłużona odpowiedź): wszystkie flagi zakresu = wartości domyślne (log 401); nieznany klucz: ta flaga = wartość domyślna (log 400); metryka z tagiem `reason` | flaga nigdy nie psuje żądania; dlatego `DefaultValue` musi być bezpieczne |
-| anulowanie | anulowanie przez wywołującego (klient zerwał połączenie) to nie fallback: `OperationCanceledException` leci dalej | jak każda inna operacja asynchroniczna |
-| GeoIP | wyłączone (`DisableGeoIp = true`) | adres serwera nic nie mówi o użytkowniku; nie targetuj flag serwerowych po kraju |
+| brak egressu z serwisów | serwisy domenowe nie łączą się z PostHog Cloud EU; ruch wychodzi wyłącznie przez wewnętrzny serwis `analytics-forwarder` | pełna izolacja NetworkPolicy mikroserwisów; brak problemów z ruchem do Internetu |
+| dwupoziomowy cache | L1 (pamięć procesu, 30 s) + L2 (Redis, 5 min) w `HybridCache` | odczyt flag w mikroserwisie jest błyskawiczny (0 ms narzutu w L1), a zapytanie HTTP do forwardera następuje tylko przy wygaśnięciu cache |
+| odświeżanie w tle | `AnalyticsForwarder` cyklicznie (co 30 s) odświeża bazowy snapshot flag w tle z PostHog (`FeatureFlagsRefreshWorker`, EventId 9005/9006) | forwarder zawsze ma gotowy snapshot w pamięci RAM |
+| dla kogo | pseudonim `ICurrentUser.Subject`; bez użytkownika (`SystemCurrentUser` w Workerze, endpoint anonimowy) `system` | rollout procentowy jest „przyklejony” do osoby i zgodny z tym, co widzi SPA |
+| timeout | `Analytics:FeatureFlagsTimeout`, domyślnie 1 s | ograniczenie czasu oczekiwania na wewnętrzny forwarder |
+| fallback | błąd cache, niedostępność forwardera lub nieznany klucz: wartość domyślna z kodu (`FeatureFlag.DefaultValue`, log 400/401) | flaga nigdy nie psuje żądania; `DefaultValue` musi być bezpieczne do trwałego działania |
 
 ### Bez analityki: `ConfigurationFeatureFlags`
 
@@ -984,7 +969,14 @@ public static IServiceCollection AddAppFeatureFlags(this IServiceCollection serv
 
     if (Settings(configuration).Enabled && !BuildTimeDocumentGeneration.IsActive)
     {
-        services.TryAddScoped<IFeatureFlags, PostHogFeatureFlags>();
+        services.AddHybridCache();
+        services.AddHttpClient("AnalyticsForwarder", (serviceProvider, client) =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<AnalyticsOptions>>().Value;
+            client.BaseAddress = options.ForwarderUrl;
+            client.Timeout = options.FeatureFlagsTimeout;
+        });
+        services.TryAddScoped<IFeatureFlags, HybridCacheFeatureFlags>();
     }
     else
     {
@@ -1272,11 +1264,10 @@ integracyjne (`ServiceFixture`) nie ustawiają `Analytics:ProjectToken`, więc d
 włączasz wpisem `FeatureFlags:{klucz}` w konfiguracji fixture'a albo podmieniasz `IFeatureFlags` w kontenerze testu.
 Pełny przykład: [przepis 10, część B](przepisy/10-zdarzenie-analityczne-i-feature-flag.md#b-nowa-flaga-w-serwisie).
 
-### Czego testy nie obejmują
+### Testy jednostkowe i integracyjne
 
-Nie ma testów automatycznych `PostHogFeatureFlags` (timeout, fallback, nieznana flaga), `PostHogProductEventSink`
-(`system` + `$process_person_profile`, `source`, `message_id`) ani proxy `/ingest` w bramie (usuwanie nagłówków, `Set-Cookie`).
-Zostały sprawdzone ręcznie lokalnie (21.12). Zmieniając te klasy, zacznij od dopisania testów.
+Testy automatyczne `HybridCacheFeatureFlags` (cache hit/miss, timeout, błąd serwisu, nieznana flaga) oraz `FeatureFlagsCache`
+znajdują się w `SuperApp.AnalyticsForwarder.Tests`.
 
 ---
 
@@ -1284,16 +1275,17 @@ Zostały sprawdzone ręcznie lokalnie (21.12). Zmieniając te klasy, zacznij od 
 
 | Sygnał | Gdzie | Interpretacja | Reakcja |
 |---|---|---|---|
-| log `EventId` 400, Warning, „Feature flag {FlagKey}: {Reason}, using the default value {DefaultValue}” | serwisy (`PostHogFeatureFlags`) | kod pyta o flagę, której PostHog nie zna (`unknown flag`) | utwórz flagę w projekcie PostHog środowiska albo usuń martwy kod flagi |
-| log `EventId` 401, Warning, „Feature flags could not be evaluated; every flag of this request uses its default value” | jw. | timeout albo błąd sieci do PostHog; cały zakres na wartościach domyślnych | sprawdź egress do `eu.i.posthog.com`, status PostHog; rozważ `FeatureFlagsKey` (lokalna ewaluacja) |
-| metryka `superapp.feature_flags.fallbacks{reason}` (`timeout`, `unavailable`, `unknown flag`), meter `SuperApp.Infrastructure` | Prometheus | ile ewaluacji skończyło się wartością domyślną | **alert** przy stałym wzroście `timeout`/`unavailable`; `unknown flag` po wdrożeniu = brak flagi w PostHog |
+| log `EventId` 400, Warning, „Feature flag {FlagKey}: {Reason}, using the default value {DefaultValue}” | serwisy (`HybridCacheFeatureFlags`) | kod pyta o flagę, której PostHog / forwarder nie zna (`unknown flag`) | utwórz flagę w projekcie PostHog środowiska albo usuń martwy kod flagi |
+| log `EventId` 401, Warning, „Feature flags could not be evaluated; every flag of this request uses its default value” | serwisy (`HybridCacheFeatureFlags`) | błąd pobrania z forwardera lub błąd pamięci podręcznej; fallback do wartości domyślnych | sprawdź pod `analytics-forwarder` (logi 9005/9006, health) oraz łączność w klastrze |
+| metryka `superapp.feature_flags.fallbacks{reason}` (`timeout`, `unavailable`, `unknown flag`, `cache_error`), meter `SuperApp.Infrastructure` | Prometheus | ile ewaluacji skończyło się wartością domyślną | **alert** przy stałym wzroście `timeout`/`unavailable`/`cache_error`; `unknown flag` po wdrożeniu = brak flagi w PostHog |
 | log `EventId` 9001, Information, „Analytics disabled: product event {EventName} ({EventOwner}, properties: {PropertyNames}) not sent” | forwarder | analityka wyłączona; tak sprawdzasz mapowanie lokalnie | na środowisku z analityką 9001 oznacza brak `Analytics__ProjectToken` w sekrecie forwardera |
 | log `EventId` 9002, Warning, „Product event {EventName} was not queued for PostHog (queue full or client disposed)” | forwarder | klient PostHog nie przyjął zdarzenia (kolejka pełna, proces się zamyka) | sprawdź łączność z PostHog i obciążenie; pojedyncze wpisy przy zamykaniu poda są oczekiwane |
+| log `EventId` 9005, Information, „Feature flags refreshed from PostHog ({Count} flags)” | forwarder | cykliczny worker odświeżył snapshot flag w pamięci | normalna praca cykliczna co 30 s |
+| log `EventId` 9006, Warning, „Failed to refresh feature flags from PostHog; continuing with cached snapshot” | forwarder | błąd odświeżenia flag z PostHog (sieć/timeout); forwarder kontynuuje z poprzednim stanem | sprawdź egress forwardera do `eu.i.posthog.com` i dostępność SaaS |
 | kolejki `analytics-*` i `analytics-*_error` | RabbitMQ, KEDA | rosnąca kolejka = forwarder nie nadąża albo nie działa; `_error` = wyjątek w konsumencie | jak dla każdego konsumenta ([17, rozdział 4](17-rozwiazywanie-problemow.md#4-messaging)) |
 
-Metryka z tagiem `reason` jest liczona: dla `timeout`/`unavailable` **raz na zakres** (jedno nieudane zapytanie), dla
-`unknown flag` raz na każde wywołanie z nieznanym kluczem. Zakresy `EventId`: 400–499 framework (feature flags), 9000–9999
-forwarder ([rejestr](../logowanie-eventid.md)).
+Metryka z tagiem `reason` jest liczona dla nieudanego pobrania lub błędu cache, a dla `unknown flag` raz na każde wywołanie
+z nieznanym kluczem. Zakresy `EventId`: 400–499 framework (feature flags), 9000–9999 forwarder ([rejestr](../logowanie-eventid.md)).
 
 ---
 

@@ -287,6 +287,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__RabbitMq: amqp://guest:guest@rabbitmq:5672/
       <<: *analytics-env
+    ports:
+      - "5180:8080"
     depends_on:
       rabbitmq:
         condition: service_healthy

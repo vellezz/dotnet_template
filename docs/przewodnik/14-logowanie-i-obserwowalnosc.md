@@ -171,8 +171,8 @@ Wszystkie istniejące komunikaty:
 | 220 | Warning | `DownstreamUnavailableExceptionHandler` | `Downstream call failed ({Code})` z wyjątkiem; `Code` = `downstream.unavailable` (brak połączenia, otwarty circuit breaker) albo `downstream.timeout` (limit czasu); odpowiedź `503` / `504` (BFF i każdy host z `AddDownstreamApi`) |
 | 230 | Information | `InternalApiCallAudit` | `Internal API {Endpoint} called by client {CallerClientId}`; szablon trasy i klient z claimu `azp`, tylko żądania pod `/internal` po autoryzacji (globalny filtr MVC w BFF) |
 | 300 | Warning | `FailSafeCache` | `Cache fail-safe: returning stale value for {CacheKey}` |
-| 400 | Warning | `PostHogFeatureFlags` | `Feature flag {FlagKey}: {Reason}, using the default value {DefaultValue}` (flaga nieznana w PostHog) |
-| 401 | Warning | `PostHogFeatureFlags` | `Feature flags could not be evaluated; every flag of this request uses its default value` (timeout, błąd sieci) |
+| 400 | Warning | `HybridCacheFeatureFlags` | `Feature flag {FlagKey}: {Reason}, using the default value {DefaultValue}` (flaga nieznana w PostHog) |
+| 401 | Warning | `HybridCacheFeatureFlags` | `Feature flags could not be evaluated; every flag of this request uses its default value` (timeout, błąd sieci) |
 | 2001, 2002 | Warning | konsumenci Knowledge | `Removing favorites of archived material/collection {Id} rejected: {ErrorCode}` |
 | 3001 | Information | `DatabaseProxyConfigProvider` | `Gateway {Profile}: applied proxy config {MigrationId} ({RouteCount} routes, {ClusterCount} clusters)` |
 | 3002 | Error | jw. | `... proxy config {MigrationId} rejected by validation; keeping previous configuration` |
@@ -322,7 +322,7 @@ nigdy identyfikator użytkownika czy zasobu (każda wartość atrybutu to osobna
 |---|---|---|---|---|
 | `superapp.cache.requests` | licznik | `result` = `fresh` / `stale` / `miss` | `FailSafeCache` | współczynnik trafień: `fresh / (fresh + stale + miss)` |
 | `superapp.cache.fail_safe.activations` | licznik | | `FailSafeCache` | ile razy zwrócono starą wartość, bo odświeżenie skończyło się błędem przejściowym; rosnąca wartość = źródło danych ma problem, użytkownicy jeszcze tego nie widzą. **Alert.** |
-| `superapp.feature_flags.fallbacks` | licznik | `reason` = `timeout` / `unavailable` / `unknown flag` | `PostHogFeatureFlags` | ile ewaluacji flag skończyło się wartością domyślną z kodu; rosnące `timeout`/`unavailable` = PostHog niedostępny. **Alert** ([21.11](21-analityka-i-feature-flags.md#2111-obserwowalność)) |
+| `superapp.feature_flags.fallbacks` | licznik | `reason` = `timeout` / `unavailable` / `unknown flag` / `cache_error` | `HybridCacheFeatureFlags` | ile ewaluacji flag skończyło się wartością domyślną z kodu; rosnące `timeout`/`unavailable` = PostHog niedostępny. **Alert** ([21.11](21-analityka-i-feature-flags.md#2111-obserwowalność)) |
 | `superapp.gateway.proxy_config.loaded` | gauge (0/1) | `profile`, `migration_id` | `DatabaseProxyConfigProvider` | czy replika ma konfigurację tras i w której wersji; różne `migration_id` na replikach = przeładowanie w toku lub błąd |
 | `superapp.gateway.proxy_config.reload_failures` | licznik | | jw. | odrzucona lub nieudana konfiguracja tras (raz na wersję migracji). **Alert.** |
 

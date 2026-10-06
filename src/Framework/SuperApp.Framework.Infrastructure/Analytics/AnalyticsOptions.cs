@@ -70,6 +70,18 @@ public sealed class AnalyticsOptions
     /// </summary>
     public TimeSpan FeatureFlagsTimeout { get; set; } = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// Gets or sets the base URL of the internal analytics forwarder service that provides feature flags over the cluster network;
+    /// default <c>http://analytics-forwarder:8080</c>.
+    /// </summary>
+    public Uri ForwarderUrl { get; set; } = new("http://analytics-forwarder:8080");
+
+    /// <summary>
+    /// Gets or sets the interval at which the forwarder periodically refreshes feature flags from PostHog into the cache;
+    /// default 30 seconds.
+    /// </summary>
+    public TimeSpan FlagsRefreshInterval { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>Gets a value indicating whether analytics is enabled, that is whether <see cref="ProjectToken"/> is set.</summary>
     public bool Enabled => !string.IsNullOrWhiteSpace(ProjectToken);
 
@@ -80,7 +92,8 @@ public sealed class AnalyticsOptions
         || (IdKey is { Length: >= MinimumIdKeyLength }
             && IsPostHogHost(Host)
             && IsPostHogHost(AssetsHost)
-            && FeatureFlagsTimeout > TimeSpan.Zero);
+            && FeatureFlagsTimeout > TimeSpan.Zero
+            && FlagsRefreshInterval > TimeSpan.Zero);
 
     // The hosts are reached from inside the cluster and by the BFF proxy; only PostHog's own HTTPS hosts are accepted, so a configuration
     // mistake cannot turn the proxy into a gateway to an arbitrary site.
